@@ -1,18 +1,29 @@
+using Microsoft.EntityFrameworkCore;
+using X_Chang.CORE.Core.Interfaces;
+using X_Chang.CORE.Core.Services;
+using X_Chang.CORE.Infrastructure.Data;
+using X_Chang.CORE.Infrastructure.Repositories;
+
 var builder = WebApplication.CreateBuilder(args);
 
-// Add services to the container.
-
 builder.Services.AddControllers();
-// Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 builder.Services.AddOpenApi();
+
+builder.Services.AddDbContext<ExchangeDivisasDbContext>(options =>
+    options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
+
+builder.Services.AddScoped<IUsuarioRepository, UsuarioRepository>();
+builder.Services.AddScoped<ISesionUsuarioRepository, SesionUsuarioRepository>();
+builder.Services.AddScoped<IConfiguracionUsuarioService, ConfiguracionUsuarioService>();
 
 var app = builder.Build();
 
-// Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
 }
+
+app.UseHttpsRedirection();
 
 app.UseAuthorization();
 

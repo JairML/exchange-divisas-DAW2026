@@ -25,4 +25,8 @@
     <Folder Include="Controllers\" />
   </ItemGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="..\X-Chang.CORE\X-Chang.CORE.csproj" />
+  </ItemGroup>
+
 </Project>
