@@ -1,0 +1,19 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>X_Chang.CORE</RootNamespace>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Folder Include="Core\DTOs\" />
+    <Folder Include="Core\Interfaces\" />
+    <Folder Include="Core\Settings\" />
+    <Folder Include="Core\Services\" />
+    <Folder Include="Infrastructure\Shared\" />
+    <Folder Include="Infrastructure\Repositories\" />
+  </ItemGroup>
+
+</Project>

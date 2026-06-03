@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="X-Chang.API/X-Chang.API.csproj" />
+  <Project Path="X-Chang.CORE/X-Chang.CORE.csproj" />
+</Solution>
