@@ -15,6 +15,9 @@ builder.Services.AddDbContext<ExchangeDivisasDbContext>(options =>
 builder.Services.AddScoped<IUsuarioRepository, UsuarioRepository>();
 builder.Services.AddScoped<ISesionUsuarioRepository, SesionUsuarioRepository>();
 builder.Services.AddScoped<IConfiguracionUsuarioService, ConfiguracionUsuarioService>();
+builder.Services.AddScoped<ICompraInmediataRepository, CompraInmediataRepository>();
+builder.Services.AddScoped<ICompraInmediataService, CompraInmediataService>();
+builder.Services.AddScoped<ISesionUsuarioRepository, SesionUsuarioRepository>();
 
 var app = builder.Build();
 
