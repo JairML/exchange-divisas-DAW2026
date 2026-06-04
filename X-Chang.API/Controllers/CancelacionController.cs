@@ -13,10 +13,14 @@ namespace X_Chang.API.Controllers
     public class CancelacionController : ControllerBase
     {
         private readonly ICancelacionService _cancelacionService;
+        private readonly INotificacionesCorreoService _notifService;
 
-        public CancelacionController(ICancelacionService cancelacionService)
+        public CancelacionController(
+            ICancelacionService cancelacionService,
+            INotificacionesCorreoService notifService)
         {
             _cancelacionService = cancelacionService;
+            _notifService = notifService;
         }
 
         // GET api/Cancelacion/detalle?tipo=Orden de compra&id=5
@@ -47,7 +51,20 @@ namespace X_Chang.API.Controllers
             if (!resultado.Exito)
                 return BadRequest(new { mensaje = resultado.Mensaje });
 
-            return Ok(resultado.Data);
+            var can = resultado.Data!;
+            await _notifService.EncolarAsync(
+                usuarioId.Value,
+                "Cancelacion",
+                $"Cancelación de {can.TipoOperacion} completada",
+                $"Tu {can.TipoOperacion} ({can.Par}) fue cancelada exitosamente. " +
+                $"Cantidad cancelada: {can.CantidadCancelada}. " +
+                $"Monto reembolsado: {can.MontoReembolsado} {can.MonedaReembolso}. " +
+                $"Nuevo saldo: {can.NuevoSaldo} {can.MonedaReembolso}. " +
+                $"Fecha: {can.FechaCancelacion:dd/MM/yyyy HH:mm}.",
+                can.TipoOperacion == "Orden de compra" ? "OrdenCompra" : "OfertaVenta",
+                can.CancelacionId);
+
+            return Ok(can);
         }
     }
 }

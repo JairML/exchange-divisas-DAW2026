@@ -13,10 +13,14 @@ namespace X_Chang.API.Controllers
     public class DepositoController : ControllerBase
     {
         private readonly IDepositoService _depositoService;
+        private readonly INotificacionesCorreoService _notifService;
 
-        public DepositoController(IDepositoService depositoService)
+        public DepositoController(
+            IDepositoService depositoService,
+            INotificacionesCorreoService notifService)
         {
             _depositoService = depositoService;
+            _notifService = notifService;
         }
 
         // GET api/Deposito/metodos-pago -> métodos de pago habilitados para el país del usuario.
@@ -58,7 +62,18 @@ namespace X_Chang.API.Controllers
             if (!resultado.Exito)
                 return BadRequest(new { mensaje = resultado.Mensaje });
 
-            return Ok(resultado.Data);
+            var dep = resultado.Data!;
+            await _notifService.EncolarAsync(
+                usuarioId.Value,
+                "Deposito",
+                $"Depósito de {dep.CodigoISO} completado",
+                $"Tu depósito de {dep.MontoDepositado} {dep.CodigoISO} fue registrado exitosamente. " +
+                $"Comisión aplicada: {dep.ComisionAplicada}. Total pagado: {dep.TotalPagado}. " +
+                $"Nuevo saldo: {dep.NuevoSaldo} {dep.CodigoISO}. Fecha: {dep.FechaDeposito:dd/MM/yyyy HH:mm}.",
+                "Deposito",
+                dep.DepositoId);
+
+            return Ok(dep);
         }
     }
 }
