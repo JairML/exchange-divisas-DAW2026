@@ -33,6 +33,8 @@ builder.Services.AddScoped<ISesionUsuarioRepository, SesionUsuarioRepository>();
 builder.Services.AddScoped<IConfiguracionUsuarioService, ConfiguracionUsuarioService>();
 builder.Services.AddScoped<ICompraInmediataRepository, CompraInmediataRepository>();
 builder.Services.AddScoped<ICompraInmediataService, CompraInmediataService>();
+builder.Services.AddScoped<IVentaInmediataRepository, VentaInmediataRepository>();
+builder.Services.AddScoped<IVentaInmediataService, VentaInmediataService>();
 
 var app = builder.Build();
 

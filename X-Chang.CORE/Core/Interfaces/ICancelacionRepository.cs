@@ -1,5 +1,5 @@
 using System.Threading.Tasks;
-using X_Chang.API.Models;
+using X_Chang.CORE.Core.Entities;
 
 namespace X_Chang.CORE.Core.Interfaces
 {
