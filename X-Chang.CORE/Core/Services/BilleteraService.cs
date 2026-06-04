@@ -1,49 +1,37 @@
-using System.Linq;
-using System.Threading.Tasks;
-using X_Chang.CORE.Core.DTOs;
-using X_Chang.CORE.Core.Interfaces;
+using Microsoft.EntityFrameworkCore;
+using X_Chang.CORE.Core.Entities;
+using X_Chang.CORE.Infrastructure.Data;
 
-namespace X_Chang.CORE.Core.Services
+namespace X_Chang.CORE.Services;
+
+public class BilleteraService
 {
-    // US-006: Billetera virtual y barra de monedas.
-    public class BilleteraService : IBilleteraService
+    private readonly ExchangeDivisasDbContext _context;
+
+    public BilleteraService(ExchangeDivisasDbContext context)
     {
-        private readonly IBilleteraRepository _billeteraRepository;
-
-        public BilleteraService(IBilleteraRepository billeteraRepository)
-        {
-            _billeteraRepository = billeteraRepository;
-        }
-
-        public async Task<BilleteraResumenDTO> GetBilletera(int usuarioId)
-        {
-            var billetera = await _billeteraRepository.GetBilleteraByUsuario(usuarioId);
-            var saldos = await _billeteraRepository.GetSaldosByUsuario(usuarioId);
-
-            // Lista completa de monedas, ordenada de mayor a menor saldo y luego por código.
-            var todos = saldos
-                .Select(s => new SaldoMonedaDTO
-                {
-                    MonedaId = s.MonedaId,
-                    CodigoISO = s.Moneda.CodigoIso,
-                    Nombre = s.Moneda.Nombre,
-                    SaldoDisponible = s.SaldoDisponible
-                })
-                .OrderByDescending(s => s.SaldoDisponible)
-                .ThenBy(s => s.CodigoISO)
-                .ToList();
-
-            // Solo las monedas con fondos (barra superior).
-            var conFondos = todos.Where(s => s.SaldoDisponible > 0m).ToList();
-
-            return new BilleteraResumenDTO
-            {
-                UsuarioId = usuarioId,
-                BilleteraId = billetera?.BilleteraId ?? 0,
-                TieneFondos = conFondos.Count > 0,
-                Saldos = todos,
-                SaldosConFondos = conFondos
-            };
-        }
+        _context = context;
     }
+
+    public static async Task<SaldosBilletera> ObtenerOCrearSaldoInternoAsync(
+        ExchangeDivisasDbContext context, int billeteraId, int monedaId)
+    {
+        var saldo = await context.SaldosBilletera
+            .FirstOrDefaultAsync(s => s.BilleteraId == billeteraId && s.MonedaId == monedaId);
+
+        if (saldo != null) return saldo;
+
+        saldo = new SaldosBilletera
+        {
+            BilleteraId = billeteraId,
+            MonedaId = monedaId,
+            SaldoDisponible = 0,
+            FechaActualizacion = DateTime.UtcNow
+        };
+        context.SaldosBilletera.Add(saldo);
+        return saldo;
+    }
+
+    private Task<SaldosBilletera> ObtenerOCrearSaldoAsync(int billeteraId, int monedaId)
+        => ObtenerOCrearSaldoInternoAsync(_context, billeteraId, monedaId);
 }

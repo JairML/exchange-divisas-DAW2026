@@ -1,16 +1,14 @@
 ﻿using Microsoft.EntityFrameworkCore;
-using System;
-using System.Collections.Generic;
-using System.Text;
 using X_Chang.CORE.Core.Entities;
-using X_Chang.CORE.Core.Interfaces;
 using X_Chang.CORE.Infrastructure.Data;
+using X_Chang.CORE.Services;
 
 namespace X_Chang.CORE.Core.Services;
 
 public class MatchingService
 {
     private readonly ExchangeDivisasDbContext _context;
+
     public MatchingService(ExchangeDivisasDbContext context)
     {
         _context = context;
@@ -201,10 +199,7 @@ public class MatchingService
         {
             if (oferta.CantidadPendiente <= 0) break;
             await EjecutarMatchingOrdenAsync(orden.OrdenCompraId);
-
             await _context.Entry(oferta).ReloadAsync();
         }
     }
-}
-
 }
