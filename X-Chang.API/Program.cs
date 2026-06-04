@@ -35,6 +35,8 @@ builder.Services.AddScoped<ICompraInmediataRepository, CompraInmediataRepository
 builder.Services.AddScoped<ICompraInmediataService, CompraInmediataService>();
 builder.Services.AddScoped<IVentaInmediataRepository, VentaInmediataRepository>();
 builder.Services.AddScoped<IVentaInmediataService, VentaInmediataService>();
+builder.Services.AddScoped<IGestionUsuariosAdminRepository, GestionUsuariosAdminRepository>();
+builder.Services.AddScoped<IGestionUsuariosAdminService, GestionUsuariosAdminService>();
 
 var app = builder.Build();
 
