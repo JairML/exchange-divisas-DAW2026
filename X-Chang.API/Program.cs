@@ -6,6 +6,22 @@ using X_Chang.CORE.Infrastructure.Repositories;
 
 var builder = WebApplication.CreateBuilder(args);
 
+builder.Services.AddTransient<ICancelacionRepository, CancelacionRepository>(); // US-022
+builder.Services.AddTransient<ICancelacionService, CancelacionService>();        // US-022
+
+// ---------------------------------------------------------------------------
+// CORS para el frontend (Vue). En desarrollo se permite cualquier origen;
+// para producción conviene restringirlo a la URL real del front.
+// ---------------------------------------------------------------------------
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("dev", policy =>
+        policy.AllowAnyOrigin()
+              .AllowAnyHeader()
+              .AllowAnyMethod());
+});
+
+// Add services to the container.
 builder.Services.AddControllers();
 builder.Services.AddOpenApi();
 
