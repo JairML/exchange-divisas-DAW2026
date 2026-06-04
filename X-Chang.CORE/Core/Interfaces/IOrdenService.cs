@@ -4,7 +4,6 @@ namespace X_Chang.CORE.Core.Interfaces
 {
     public interface IOrdenService
     {
-        Task CancelarOrdenAsync(int usuarioId, int id);
         Task<OrdenDto> CrearOrdenCompraAsync(int usuarioId, CrearOrdenRequest request);
         Task<LibroOrdenesDto> ObtenerLibroOrdenesAsync(int parMonedaId);
         Task<LibroOrdenesDetalleDto> ObtenerLibroOrdenesDetalleAsync(int parMonedaId, int limite = 10);
