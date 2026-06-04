@@ -6,6 +6,16 @@ using X_Chang.CORE.Infrastructure.Repositories;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Catálogos
+builder.Services.AddScoped<IMonedasRepository, MonedasRepository>();
+builder.Services.AddScoped<IMonedasService, MonedasService>();
+builder.Services.AddScoped<IPaisesRepository, PaisesRepository>();
+builder.Services.AddScoped<IPaisesService, PaisesService>();
+builder.Services.AddScoped<IParesMonedaRepository, ParesMonedaRepository>();
+builder.Services.AddScoped<IParesMonedaService, ParesMonedaService>();
+builder.Services.AddScoped<IMetodosPagoRepository, MetodosPagoRepository>();
+builder.Services.AddScoped<IMetodosPagoService, MetodosPagoService>();
+
 // Auth (US-001 / US-002)
 builder.Services.AddScoped<IAuthRepository, AuthRepository>();
 builder.Services.AddScoped<IAuthService, AuthService>();
