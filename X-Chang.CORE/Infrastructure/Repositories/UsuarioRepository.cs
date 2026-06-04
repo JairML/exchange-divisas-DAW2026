@@ -23,6 +23,14 @@ namespace X_Chang.CORE.Infrastructure.Repositories
                 .FirstOrDefaultAsync(u => u.UsuarioId == usuarioId);
         }
 
+        public async Task<Usuarios?> ObtenerConRolYPaisAsync(int usuarioId)
+        {
+            return await _context.Usuarios
+                .Include(u => u.Rol)
+                .Include(u => u.Pais)
+                .FirstOrDefaultAsync(u => u.UsuarioId == usuarioId);
+        }
+
         public async Task ActualizarAsync(Usuarios usuario)
         {
             _context.Usuarios.Update(usuario);

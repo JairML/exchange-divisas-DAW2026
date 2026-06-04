@@ -6,6 +6,11 @@ using X_Chang.CORE.Infrastructure.Repositories;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Auth (US-001 / US-002)
+builder.Services.AddScoped<IAuthRepository, AuthRepository>();
+builder.Services.AddScoped<IAuthService, AuthService>();
+builder.Services.AddScoped<IUsuarioService, UsuarioService>();
+
 builder.Services.AddTransient<ICancelacionRepository, CancelacionRepository>(); // US-022
 builder.Services.AddTransient<ICancelacionService, CancelacionService>();        // US-022
 
