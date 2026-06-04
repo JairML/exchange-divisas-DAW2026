@@ -1,6 +1,6 @@
 using System.Linq;
 using System.Threading.Tasks;
-using X_Chang.API.Models;
+using X_Chang.CORE.Core.Entities;
 using X_Chang.CORE.Core.DTOs;
 using X_Chang.CORE.Core.Interfaces;
 
