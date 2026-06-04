@@ -30,6 +30,10 @@ builder.Services.AddDbContext<ExchangeDivisasDbContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
 
 
+// US-008: retiro de dinero de la billetera
+builder.Services.AddScoped<IRetiroRepository, RetiroRepository>();
+builder.Services.AddScoped<IRetiroService, RetiroService>();
+
 // US-018: notificaciones por correo electrónico
 builder.Services.Configure<SmtpSettings>(builder.Configuration.GetSection("SmtpSettings"));
 builder.Services.AddScoped<IEmailService, EmailService>();
