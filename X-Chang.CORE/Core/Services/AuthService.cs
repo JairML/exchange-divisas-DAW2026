@@ -67,6 +67,55 @@ public class AuthService : IAuthService
         return await GenerarResponseAsync(usuario, rol.Nombre);
     }
 
+    // US-002: inicio de sesion.
+    public async Task<AuthResponseDto> LoginAsync(LoginRequestDto request)
+    {
+        var id = request.IdentificadorAcceso.Trim();
+        var metodoIngreso = id.Contains('@') ? "CorreoElectronico" : "NombreUsuario";
+        var usuario = await _authRepo.BuscarPorIdentificadorAsync(id);
+        var exito = usuario != null && BCrypt.Net.BCrypt.Verify(request.Password, usuario.PasswordHash);
+
+        if (usuario != null)
+        {
+            await _authRepo.RegistrarAccesoAsync(new AccesosUsuario
+            {
+                UsuarioId = usuario.UsuarioId,
+                FechaAcceso = DateTime.UtcNow,
+                Exitoso = exito,
+                MetodoIngreso = metodoIngreso,
+                MensajeResultado = exito ? "Login exitoso" : "Credenciales inválidas"
+            });
+        }
+
+        if (!exito || usuario == null)
+            throw new UnauthorizedAccessException("Correo o contraseña incorrectos.");
+
+        if (usuario.Estado != "Activo")
+            throw new UnauthorizedAccessException($"La cuenta está {usuario.Estado.ToLower()}.");
+
+        await _authRepo.ActualizarFechaAccesoAsync(usuario.UsuarioId);
+        return await GenerarResponseAsync(usuario, usuario.Rol.Nombre);
+    }
+
+    // US-002: cierre de sesion.
+    public async Task LogoutAsync(int usuarioId, string token) =>
+        await _sesionRepo.CerrarSesionAsync(token);
+
+    // US-002: renovacion de token.
+    public async Task<AuthResponseDto> RefreshTokenAsync(RefreshTokenRequestDto request)
+    {
+        var sesion = await _sesionRepo.ObtenerSesionActivaAsync(request.Token);
+
+        if (sesion == null || sesion.FechaExpiracion < DateTime.UtcNow)
+            throw new UnauthorizedAccessException("Token inválido o expirado.");
+
+        if (sesion.Usuario.Estado != "Activo")
+            throw new UnauthorizedAccessException("La cuenta no está activa.");
+
+        await _sesionRepo.CerrarSesionAsync(request.Token);
+        return await GenerarResponseAsync(sesion.Usuario, sesion.Usuario.Rol.Nombre);
+    }
+
     private async Task<AuthResponseDto> GenerarResponseAsync(Usuarios usuario, string rolNombre)
     {
         var token = Convert.ToBase64String(RandomNumberGenerator.GetBytes(64));
