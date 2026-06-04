@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 
-namespace X_Chang.CORE.Core.Entities;
+namespace X_Chang.API.Models;
 
 public partial class OrdenesCompra
 {

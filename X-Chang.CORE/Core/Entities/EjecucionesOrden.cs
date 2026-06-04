@@ -1,7 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
+using X_Chang.CORE.Core.Entities;
 
-namespace X_Chang.CORE.Core.Entities;
+namespace X_Chang.API.Models;
 
 public partial class EjecucionesOrden
 {
