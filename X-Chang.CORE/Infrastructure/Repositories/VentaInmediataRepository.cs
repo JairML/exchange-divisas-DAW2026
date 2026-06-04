@@ -251,6 +251,8 @@ namespace X_Chang.CORE.Infrastructure.Repositories
                 .OrderBy(s => s.NumeroSalto)
                 .ToList();
 
+            var operacionesHijas = new List<VentaInmediataResponseDto>();
+
             foreach (var salto in saltos)
             {
                 var child = await EjecutarVentaNormalInternaAsync(
@@ -260,11 +262,36 @@ namespace X_Chang.CORE.Infrastructure.Repositories
                     "Mejor ruta",
                     parent.OperacionInmediataId);
 
+                operacionesHijas.Add(child);
+
                 salto.OperacionInmediataHijaId = child.OperacionInmediataId;
                 salto.OperacionInmediataId = parent.OperacionInmediataId;
             }
 
             ruta.OperacionInmediataId = parent.OperacionInmediataId;
+
+            if (operacionesHijas.Any())
+            {
+                var totalFinalRecibido = operacionesHijas.Last().TotalRecibido;
+
+                parent.TotalRecibido = totalFinalRecibido;
+
+                parent.PrecioMinimo = operacionesHijas
+                    .Where(o => o.PrecioMinimo.HasValue)
+                    .Select(o => o.PrecioMinimo!.Value)
+                    .DefaultIfEmpty()
+                    .Min();
+
+                parent.PrecioMaximo = operacionesHijas
+                    .Where(o => o.PrecioMaximo.HasValue)
+                    .Select(o => o.PrecioMaximo!.Value)
+                    .DefaultIfEmpty()
+                    .Max();
+
+                parent.PrecioPromedio = busqueda.CantidadSolicitada > 0
+                    ? totalFinalRecibido / busqueda.CantidadSolicitada
+                    : null;
+            }
 
             _context.HistorialTransacciones.Add(new HistorialTransacciones
             {
@@ -276,6 +303,14 @@ namespace X_Chang.CORE.Infrastructure.Repositories
                 MetodoEjecucion = "Mejor ruta",
                 FechaHora = DateTime.Now
             });
+
+            await CrearNotificacionAsync(
+                usuarioId,
+                "Mejor ruta",
+                "Venta mediante mejor ruta ejecutada",
+                $"Tu venta mediante mejor ruta fue ejecutada por un total de {parent.TotalRecibido}.",
+                "OperacionInmediata",
+                parent.OperacionInmediataId);
 
             await _context.SaveChangesAsync();
             await transaction.CommitAsync();
@@ -592,7 +627,13 @@ namespace X_Chang.CORE.Infrastructure.Repositories
             ofertaEspejo.CantidadPendiente -= totalPagado;
             ofertaEspejo.TotalRecibido += cantidadComprada;
             ofertaEspejo.FechaActualizacion = DateTime.Now;
-            ofertaEspejo.Estado = orden.Estado;
+
+            if (ofertaEspejo.CantidadPendiente < 0)
+                ofertaEspejo.CantidadPendiente = 0;
+
+            ofertaEspejo.Estado = ofertaEspejo.CantidadPendiente == 0
+                ? "Completada"
+                : "Parcialmente ejecutada";
         }
     }
 }
