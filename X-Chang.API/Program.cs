@@ -6,6 +6,14 @@ using X_Chang.CORE.Infrastructure.Repositories;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Billetera
+builder.Services.AddScoped<IBilleteraConsultaRepository, BilleteraConsultaRepository>();
+builder.Services.AddScoped<IBilleteraConsultaService, BilleteraConsultaService>();
+builder.Services.AddScoped<IDepositosRepository, DepositosRepository>();
+builder.Services.AddScoped<IDepositosService, DepositosService>();
+builder.Services.AddScoped<IRetirosRepository, RetirosRepository>();
+builder.Services.AddScoped<IRetirosService, RetirosService>();
+
 // Catálogos
 builder.Services.AddScoped<IMonedasRepository, MonedasRepository>();
 builder.Services.AddScoped<IMonedasService, MonedasService>();
