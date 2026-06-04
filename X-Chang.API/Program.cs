@@ -6,8 +6,6 @@ using X_Chang.CORE.Infrastructure.Repositories;
 
 var builder = WebApplication.CreateBuilder(args);
 
-builder.Services.AddTransient<ICancelacionRepository, CancelacionRepository>(); // US-022
-builder.Services.AddTransient<ICancelacionService, CancelacionService>();        // US-022
 
 // ---------------------------------------------------------------------------
 // CORS para el frontend (Vue). En desarrollo se permite cualquier origen;
@@ -28,19 +26,6 @@ builder.Services.AddOpenApi();
 builder.Services.AddDbContext<ExchangeDivisasDbContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
 
-builder.Services.AddScoped<IUsuarioRepository, UsuarioRepository>();
-builder.Services.AddScoped<ISesionUsuarioRepository, SesionUsuarioRepository>();
-builder.Services.AddScoped<IConfiguracionUsuarioService, ConfiguracionUsuarioService>();
-builder.Services.AddScoped<ICompraInmediataRepository, CompraInmediataRepository>();
-builder.Services.AddScoped<ICompraInmediataService, CompraInmediataService>();
-builder.Services.AddScoped<IVentaInmediataRepository, VentaInmediataRepository>();
-builder.Services.AddScoped<IVentaInmediataService, VentaInmediataService>();
-builder.Services.AddScoped<IGestionUsuariosAdminRepository, GestionUsuariosAdminRepository>();
-builder.Services.AddScoped<IGestionUsuariosAdminService, GestionUsuariosAdminService>();
-builder.Services.AddScoped<IAuditoriaAdministrativaRepository, AuditoriaAdministrativaRepository>();
-builder.Services.AddScoped<IAuditoriaAdministrativaService, AuditoriaAdministrativaService>();
-builder.Services.AddScoped<IPreciosParRepository, PreciosParRepository>();
-builder.Services.AddScoped<IPreciosParService, PreciosParService>();
 
 var app = builder.Build();
 
