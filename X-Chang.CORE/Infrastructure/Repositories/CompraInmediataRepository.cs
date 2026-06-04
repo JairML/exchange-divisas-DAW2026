@@ -416,6 +416,8 @@ namespace X_Chang.CORE.Infrastructure.Repositories
                     ? "Completada"
                     : "Parcialmente ejecutada";
 
+                await SincronizarOrdenEspejoDesdeOfertaAsync(oferta, cantidad, total);
+
                 var saldoVendedorOrigen = await ObtenerSaldoEntityAsync(oferta.UsuarioId, par.MonedaOrigenId);
                 var saldoAnteriorVendedor = saldoVendedorOrigen.SaldoDisponible;
 
@@ -569,6 +571,24 @@ namespace X_Chang.CORE.Infrastructure.Repositories
                 FechaOperacion = operacion.FechaOperacion,
                 Ejecuciones = ejecuciones
             };
+        }
+
+        private async Task SincronizarOrdenEspejoDesdeOfertaAsync(
+            OfertasVenta oferta,
+            decimal cantidadVendida,
+            decimal totalRecibido)
+        {
+            if (oferta.OrdenCompraEspejoId == null)
+                throw new InvalidOperationException("La oferta no tiene orden espejo asociada.");
+
+            var ordenEspejo = await _context.OrdenesCompra
+                .FirstAsync(o => o.OrdenCompraId == oferta.OrdenCompraEspejoId.Value);
+
+            ordenEspejo.CantidadObtenida += totalRecibido;
+            ordenEspejo.CantidadPendiente -= totalRecibido;
+            ordenEspejo.TotalEjecutado += cantidadVendida;
+            ordenEspejo.FechaActualizacion = DateTime.Now;
+            ordenEspejo.Estado = oferta.Estado;
         }
     }
 }

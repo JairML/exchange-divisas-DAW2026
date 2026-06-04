@@ -38,4 +38,8 @@ public partial class OfertasVenta
     public virtual ParesMoneda ParMoneda { get; set; } = null!;
 
     public virtual Usuarios Usuario { get; set; } = null!;
+
+    public int? OrdenCompraEspejoId { get; set; }
+
+    public virtual OrdenesCompra? OrdenCompraEspejo { get; set; }
 }

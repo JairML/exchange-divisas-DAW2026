@@ -38,9 +38,13 @@ namespace X_Chang.API.Controllers
 
                 return Ok(resultado);
             }
+            catch (UnauthorizedAccessException ex)
+            {
+                return Unauthorized(new { mensaje = ex.Message });
+            }
             catch (Exception ex)
             {
-                return BadRequest(ex.Message);
+                return BadRequest(new { mensaje = ex.Message });
             }
         }
 
@@ -59,9 +63,13 @@ namespace X_Chang.API.Controllers
 
                 return Ok(resultado);
             }
+            catch (UnauthorizedAccessException ex)
+            {
+                return Unauthorized(new { mensaje = ex.Message });
+            }
             catch (Exception ex)
             {
-                return BadRequest(ex.Message);
+                return BadRequest(new { mensaje = ex.Message });
             }
         }
 
@@ -77,9 +85,13 @@ namespace X_Chang.API.Controllers
 
                 return Ok(resultado);
             }
+            catch (UnauthorizedAccessException ex)
+            {
+                return Unauthorized(new { mensaje = ex.Message });
+            }
             catch (Exception ex)
             {
-                return BadRequest(ex.Message);
+                return BadRequest(new { mensaje = ex.Message });
             }
         }
 
@@ -98,9 +110,13 @@ namespace X_Chang.API.Controllers
 
                 return Ok(resultado);
             }
+            catch (UnauthorizedAccessException ex)
+            {
+                return Unauthorized(new { mensaje = ex.Message });
+            }
             catch (Exception ex)
             {
-                return BadRequest(ex.Message);
+                return BadRequest(new { mensaje = ex.Message });
             }
         }
 
@@ -119,9 +135,13 @@ namespace X_Chang.API.Controllers
 
                 return Ok(resultado);
             }
+            catch (UnauthorizedAccessException ex)
+            {
+                return Unauthorized(new { mensaje = ex.Message });
+            }
             catch (Exception ex)
             {
-                return BadRequest(ex.Message);
+                return BadRequest(new { mensaje = ex.Message });
             }
         }
 
@@ -140,9 +160,13 @@ namespace X_Chang.API.Controllers
 
                 return Ok(resultado);
             }
+            catch (UnauthorizedAccessException ex)
+            {
+                return Unauthorized(new { mensaje = ex.Message });
+            }
             catch (Exception ex)
             {
-                return BadRequest(ex.Message);
+                return BadRequest(new { mensaje = ex.Message });
             }
         }
     }

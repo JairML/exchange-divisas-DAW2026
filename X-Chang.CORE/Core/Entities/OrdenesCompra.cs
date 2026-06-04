@@ -38,4 +38,6 @@ public partial class OrdenesCompra
     public virtual ParesMoneda ParMoneda { get; set; } = null!;
 
     public virtual Usuarios Usuario { get; set; } = null!;
+
+    public virtual ICollection<OfertasVenta> OfertasVentaEspejo { get; set; } = new List<OfertasVenta>();
 }
