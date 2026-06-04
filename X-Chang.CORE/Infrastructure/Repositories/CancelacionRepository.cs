@@ -2,9 +2,10 @@ using System;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
-using X_Chang.API.Models;
+using X_Chang.CORE.Core.Entities;
 using X_Chang.CORE.Core.Interfaces;
 using X_Chang.CORE.Infrastructure.Shared;
+using X_Chang.CORE.Infrastructure.Data;
 
 namespace X_Chang.CORE.Infrastructure.Repositories
 {

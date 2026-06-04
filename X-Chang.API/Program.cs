@@ -33,7 +33,12 @@ builder.Services.AddScoped<ISesionUsuarioRepository, SesionUsuarioRepository>();
 builder.Services.AddScoped<IConfiguracionUsuarioService, ConfiguracionUsuarioService>();
 builder.Services.AddScoped<ICompraInmediataRepository, CompraInmediataRepository>();
 builder.Services.AddScoped<ICompraInmediataService, CompraInmediataService>();
-builder.Services.AddScoped<ISesionUsuarioRepository, SesionUsuarioRepository>();
+builder.Services.AddScoped<IVentaInmediataRepository, VentaInmediataRepository>();
+builder.Services.AddScoped<IVentaInmediataService, VentaInmediataService>();
+builder.Services.AddScoped<IGestionUsuariosAdminRepository, GestionUsuariosAdminRepository>();
+builder.Services.AddScoped<IGestionUsuariosAdminService, GestionUsuariosAdminService>();
+builder.Services.AddScoped<IAuditoriaAdministrativaRepository, AuditoriaAdministrativaRepository>();
+builder.Services.AddScoped<IAuditoriaAdministrativaService, AuditoriaAdministrativaService>();
 
 var app = builder.Build();
 
@@ -43,6 +48,8 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
+
+app.UseCors("dev");
 
 app.UseAuthorization();
 

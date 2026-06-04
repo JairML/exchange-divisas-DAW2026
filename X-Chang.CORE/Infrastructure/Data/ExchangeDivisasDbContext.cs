@@ -490,6 +490,11 @@ public partial class ExchangeDivisasDbContext : DbContext
                 .HasForeignKey(d => d.UsuarioId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("FK__OfertasVe__Usuar__395884C4");
+
+            entity.HasOne(d => d.OrdenCompraEspejo)
+                .WithMany(p => p.OfertasVentaEspejo)
+                .HasForeignKey(d => d.OrdenCompraEspejoId)
+                .HasConstraintName("FK_OfertasVenta_OrdenCompraEspejo");
         });
 
         modelBuilder.Entity<OperacionInmediataEjecuciones>(entity =>

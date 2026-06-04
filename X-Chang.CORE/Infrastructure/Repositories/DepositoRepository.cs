@@ -3,9 +3,10 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
-using X_Chang.API.Models;
+using X_Chang.CORE.Core.Entities;
 using X_Chang.CORE.Core.Interfaces;
 using X_Chang.CORE.Infrastructure.Shared;
+using X_Chang.CORE.Infrastructure.Data;
 
 namespace X_Chang.CORE.Infrastructure.Repositories
 {
@@ -121,7 +122,7 @@ namespace X_Chang.CORE.Infrastructure.Repositories
             await _context.SaveChangesAsync(); // obtiene el DepositoId generado
 
             // 2) Voucher (US-018 enviará el correo; aquí solo dejamos la URL del comprobante).
-            var voucherUrl = $"https://x-chang.local/vouchers/deposito-{deposito.DepositoId}.pdf";
+            var voucherUrl = $"https://X_Chang.local/vouchers/deposito-{deposito.DepositoId}.pdf";
             deposito.VoucherUrl = voucherUrl;
 
             // 3) Abonar el monto depositado al saldo de la moneda.
