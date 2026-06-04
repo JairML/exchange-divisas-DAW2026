@@ -1,9 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
-using Microsoft.EntityFrameworkCore;
 using X_Chang.CORE.Core.Entities;
 
-namespace X_Chang.CORE.Infrastructure.Data;
+namespace X_Chang.API.Models;
 
 public partial class ExchangeDivisasDbContext : DbContext
 {
@@ -82,14 +81,9 @@ public partial class ExchangeDivisasDbContext : DbContext
 
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
     {
-        // Solo aplica esta cadena por defecto si el contenedor de dependencias (Program.cs)
-        // no configuró ya el proveedor. La cadena real se inyecta desde appsettings.json
-        // ("ConnectionStrings:DevConnection"); esta queda como respaldo para el diseñador de EF.
         if (!optionsBuilder.IsConfigured)
-        {
             optionsBuilder.UseSqlServer("Server=localhost;Database=ExchangeDivisasDB;Trusted_Connection=True;TrustServerCertificate=True");
         }
-    }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
