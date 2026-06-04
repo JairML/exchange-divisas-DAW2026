@@ -37,6 +37,8 @@ builder.Services.AddScoped<IVentaInmediataRepository, VentaInmediataRepository>(
 builder.Services.AddScoped<IVentaInmediataService, VentaInmediataService>();
 builder.Services.AddScoped<IGestionUsuariosAdminRepository, GestionUsuariosAdminRepository>();
 builder.Services.AddScoped<IGestionUsuariosAdminService, GestionUsuariosAdminService>();
+builder.Services.AddScoped<IAuditoriaAdministrativaRepository, AuditoriaAdministrativaRepository>();
+builder.Services.AddScoped<IAuditoriaAdministrativaService, AuditoriaAdministrativaService>();
 
 var app = builder.Build();
 
