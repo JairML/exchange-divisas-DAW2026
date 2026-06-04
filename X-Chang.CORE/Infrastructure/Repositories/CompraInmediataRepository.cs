@@ -207,8 +207,8 @@ namespace X_Chang.CORE.Infrastructure.Repositories
         }
 
         public async Task<CompraInmediataResponseDto> EjecutarCompraInmediataPorRutaAsync(
-            int usuarioId,
-            int busquedaRutaId)
+    int usuarioId,
+    int busquedaRutaId)
         {
             using var transaction = await _context.Database.BeginTransactionAsync();
 
@@ -250,6 +250,8 @@ namespace X_Chang.CORE.Infrastructure.Repositories
                 .OrderBy(s => s.NumeroSalto)
                 .ToList();
 
+            var operacionesHijas = new List<CompraInmediataResponseDto>();
+
             foreach (var salto in saltos)
             {
                 var child = await EjecutarCompraNormalInternaAsync(
@@ -259,11 +261,36 @@ namespace X_Chang.CORE.Infrastructure.Repositories
                     "Mejor ruta",
                     parent.OperacionInmediataId);
 
+                operacionesHijas.Add(child);
+
                 salto.OperacionInmediataHijaId = child.OperacionInmediataId;
                 salto.OperacionInmediataId = parent.OperacionInmediataId;
             }
 
             ruta.OperacionInmediataId = parent.OperacionInmediataId;
+
+            if (operacionesHijas.Any())
+            {
+                var costoInicial = operacionesHijas.First().TotalPagado;
+
+                parent.TotalPagado = costoInicial;
+
+                parent.PrecioMinimo = operacionesHijas
+                    .Where(o => o.PrecioMinimo.HasValue)
+                    .Select(o => o.PrecioMinimo!.Value)
+                    .DefaultIfEmpty()
+                    .Min();
+
+                parent.PrecioMaximo = operacionesHijas
+                    .Where(o => o.PrecioMaximo.HasValue)
+                    .Select(o => o.PrecioMaximo!.Value)
+                    .DefaultIfEmpty()
+                    .Max();
+
+                parent.PrecioPromedio = busqueda.CantidadSolicitada > 0
+                    ? costoInicial / busqueda.CantidadSolicitada
+                    : null;
+            }
 
             _context.HistorialTransacciones.Add(new HistorialTransacciones
             {
@@ -275,6 +302,14 @@ namespace X_Chang.CORE.Infrastructure.Repositories
                 MetodoEjecucion = "Mejor ruta",
                 FechaHora = DateTime.Now
             });
+
+            await CrearNotificacionAsync(
+                usuarioId,
+                "Mejor ruta",
+                "Compra mediante mejor ruta ejecutada",
+                $"Tu compra mediante mejor ruta fue ejecutada por un total de {parent.TotalPagado}.",
+                "OperacionInmediata",
+                parent.OperacionInmediataId);
 
             await _context.SaveChangesAsync();
             await transaction.CommitAsync();
@@ -588,7 +623,13 @@ namespace X_Chang.CORE.Infrastructure.Repositories
             ordenEspejo.CantidadPendiente -= totalRecibido;
             ordenEspejo.TotalEjecutado += cantidadVendida;
             ordenEspejo.FechaActualizacion = DateTime.Now;
-            ordenEspejo.Estado = oferta.Estado;
+
+            if (ordenEspejo.CantidadPendiente < 0)
+                ordenEspejo.CantidadPendiente = 0;
+
+            ordenEspejo.Estado = ordenEspejo.CantidadPendiente == 0
+                ? "Completada"
+                : "Parcialmente ejecutada";
         }
     }
 }
