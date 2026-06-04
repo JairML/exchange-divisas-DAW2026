@@ -1,16 +1,16 @@
 ﻿using Microsoft.AspNetCore.Mvc;
-using X_Chang.CORE.Core.DTOs.CompraInmediata;
+using X_Chang.CORE.Core.DTOs.VentaInmediata;
 using X_Chang.CORE.Core.Interfaces;
 
 namespace X_Chang.API.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
-    public class CompraInmediataController : ControllerBase
+    public class VentaInmediataController : ControllerBase
     {
-        private readonly ICompraInmediataService _service;
+        private readonly IVentaInmediataService _service;
 
-        public CompraInmediataController(ICompraInmediataService service)
+        public VentaInmediataController(IVentaInmediataService service)
         {
             _service = service;
         }
@@ -24,18 +24,12 @@ namespace X_Chang.API.Controllers
         }
 
         [HttpPost("resumen")]
-        public async Task<IActionResult> ObtenerResumen(
-            [FromBody] CompraInmediataRequestDto request)
+        public async Task<IActionResult> ObtenerResumen([FromBody] VentaInmediataRequestDto request)
         {
             try
             {
                 var token = ObtenerTokenSesion();
-
-                var resultado =
-                    await _service.ObtenerResumenCompraNormalAsync(
-                        token,
-                        request);
-
+                var resultado = await _service.ObtenerResumenVentaNormalAsync(token, request);
                 return Ok(resultado);
             }
             catch (UnauthorizedAccessException ex)
@@ -49,18 +43,12 @@ namespace X_Chang.API.Controllers
         }
 
         [HttpPost("confirmar")]
-        public async Task<IActionResult> ConfirmarCompra(
-            [FromBody] ConfirmarCompraInmediataRequestDto request)
+        public async Task<IActionResult> ConfirmarVenta([FromBody] ConfirmarVentaInmediataRequestDto request)
         {
             try
             {
                 var token = ObtenerTokenSesion();
-
-                var resultado =
-                    await _service.ConfirmarCompraNormalAsync(
-                        token,
-                        request);
-
+                var resultado = await _service.ConfirmarVentaNormalAsync(token, request);
                 return Ok(resultado);
             }
             catch (UnauthorizedAccessException ex)
@@ -74,20 +62,12 @@ namespace X_Chang.API.Controllers
         }
 
         [HttpGet("tiempo-busqueda/{saltos}")]
-        public async Task<IActionResult> ObtenerTiempoBusqueda(
-            int saltos)
+        public async Task<IActionResult> ObtenerTiempoBusqueda(int saltos)
         {
             try
             {
-                var resultado =
-                    await _service.ObtenerTiempoEstimadoBusquedaRutaAsync(
-                        saltos);
-
+                var resultado = await _service.ObtenerTiempoEstimadoBusquedaRutaAsync(saltos);
                 return Ok(resultado);
-            }
-            catch (UnauthorizedAccessException ex)
-            {
-                return Unauthorized(new { mensaje = ex.Message });
             }
             catch (Exception ex)
             {
@@ -96,18 +76,12 @@ namespace X_Chang.API.Controllers
         }
 
         [HttpPost("buscar-ruta")]
-        public async Task<IActionResult> BuscarRuta(
-            [FromBody] BuscarMejorRutaCompraRequestDto request)
+        public async Task<IActionResult> BuscarRuta([FromBody] BuscarMejorRutaVentaRequestDto request)
         {
             try
             {
                 var token = ObtenerTokenSesion();
-
-                var resultado =
-                    await _service.BuscarMejorRutaAsync(
-                        token,
-                        request);
-
+                var resultado = await _service.BuscarMejorRutaAsync(token, request);
                 return Ok(resultado);
             }
             catch (UnauthorizedAccessException ex)
@@ -121,18 +95,12 @@ namespace X_Chang.API.Controllers
         }
 
         [HttpDelete("cancelar-ruta/{busquedaRutaId}")]
-        public async Task<IActionResult> CancelarBusquedaRuta(
-            int busquedaRutaId)
+        public async Task<IActionResult> CancelarBusquedaRuta(int busquedaRutaId)
         {
             try
             {
                 var token = ObtenerTokenSesion();
-
-                var resultado =
-                    await _service.CancelarBusquedaRutaAsync(
-                        token,
-                        busquedaRutaId);
-
+                var resultado = await _service.CancelarBusquedaRutaAsync(token, busquedaRutaId);
                 return Ok(resultado);
             }
             catch (UnauthorizedAccessException ex)
@@ -146,18 +114,12 @@ namespace X_Chang.API.Controllers
         }
 
         [HttpPost("confirmar-ruta")]
-        public async Task<IActionResult> ConfirmarRuta(
-            [FromBody] ConfirmarCompraRutaRequestDto request)
+        public async Task<IActionResult> ConfirmarRuta([FromBody] ConfirmarVentaRutaRequestDto request)
         {
             try
             {
                 var token = ObtenerTokenSesion();
-
-                var resultado =
-                    await _service.ConfirmarCompraPorRutaAsync(
-                        token,
-                        request);
-
+                var resultado = await _service.ConfirmarVentaPorRutaAsync(token, request);
                 return Ok(resultado);
             }
             catch (UnauthorizedAccessException ex)
