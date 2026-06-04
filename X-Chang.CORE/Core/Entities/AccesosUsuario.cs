@@ -19,3 +19,4 @@ public partial class AccesosUsuario
 
     public virtual Usuarios Usuario { get; set; } = null!;
 }
+
