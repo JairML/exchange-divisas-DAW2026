@@ -12,3 +12,5 @@ public record LibroOrdenesDto(List<NivelOrdenDto> Compras, List<NivelOrdenDto> V
 public record NivelOrdenDto(decimal Precio, decimal CantidadTotal, int NumeroOrdenes);
 public record LibroOrdenEntradaDto(int Id, decimal Cantidad, decimal PrecioUnitario, DateTime FechaCreacion);
 public record LibroOrdenesDetalleDto(List<LibroOrdenEntradaDto> Compras, List<LibroOrdenEntradaDto> Ventas);
+
+

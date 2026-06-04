@@ -1,12 +1,12 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Text;
-using X_Chang.CORE.DTOs;
+﻿using X_Chang.CORE.DTOs;
 
-namespace X_Chang.CORE.Interfaces;
-
-public interface IOrdenService
+namespace X_Chang.CORE.Core.Interfaces
 {
-    Task<LibroOrdenesDto> ObtenerLibroOrdenesAsync(int parMonedaId);
-    Task<LibroOrdenesDetalleDto> ObtenerLibroOrdenesDetalleAsync(int parMonedaId, int limite = 10);
+    public interface IOrdenService
+    {
+        Task CancelarOrdenAsync(int usuarioId, int id);
+        Task<OrdenDto> CrearOrdenCompraAsync(int usuarioId, CrearOrdenRequest request);
+        Task<LibroOrdenesDto> ObtenerLibroOrdenesAsync(int parMonedaId);
+        Task<LibroOrdenesDetalleDto> ObtenerLibroOrdenesDetalleAsync(int parMonedaId, int limite = 10);
+    }
 }
