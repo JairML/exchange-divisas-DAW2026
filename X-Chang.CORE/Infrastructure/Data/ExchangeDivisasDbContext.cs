@@ -1,8 +1,9 @@
 ﻿using System;
 using System.Collections.Generic;
 using Microsoft.EntityFrameworkCore;
+using X_Chang.CORE.Core.Entities;
 
-namespace X_Chang.API.Models;
+namespace X_Chang.CORE.Infrastructure.Data;
 
 public partial class ExchangeDivisasDbContext : DbContext
 {
