@@ -73,4 +73,39 @@ public class AuthController : ControllerBase
             return Unauthorized(new { mensaje = ex.Message });
         }
     }
+
+    // US-003: datos del usuario autenticado para construir el menu lateral.
+    [Authorize]
+    [HttpGet("me")]
+    public IActionResult GetMe()
+    {
+        var usuarioId = this.GetUsuarioId();
+        if (usuarioId == null) return Unauthorized();
+
+        return Ok(new
+        {
+            UsuarioId = usuarioId.Value,
+            NombreUsuario = User.FindFirst("NombreUsuario")?.Value,
+            CorreoElectronico = User.FindFirst("CorreoElectronico")?.Value,
+            Rol = User.FindFirst("Rol")?.Value,
+            TemaVisual = User.FindFirst("TemaVisual")?.Value
+        });
+    }
+
+    // US-003: opciones de navegacion segun el rol del usuario.
+    [Authorize]
+    [HttpGet("menu")]
+    public IActionResult GetMenu()
+    {
+        var rol = User.FindFirst("Rol")?.Value;
+        var opciones = new List<string>
+        {
+            "Menu principal", "Monedas", "Transacciones",
+            "Historial", "Usuario", "Configuracion", "Cerrar sesion"
+        };
+        if (rol == "Administrador")
+            opciones.Insert(opciones.Count - 1, "Administracion");
+
+        return Ok(new { Rol = rol, Opciones = opciones });
+    }
 }
