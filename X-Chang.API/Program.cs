@@ -39,6 +39,8 @@ builder.Services.AddScoped<IGestionUsuariosAdminRepository, GestionUsuariosAdmin
 builder.Services.AddScoped<IGestionUsuariosAdminService, GestionUsuariosAdminService>();
 builder.Services.AddScoped<IAuditoriaAdministrativaRepository, AuditoriaAdministrativaRepository>();
 builder.Services.AddScoped<IAuditoriaAdministrativaService, AuditoriaAdministrativaService>();
+builder.Services.AddScoped<IPreciosParRepository, PreciosParRepository>();
+builder.Services.AddScoped<IPreciosParService, PreciosParService>();
 
 var app = builder.Build();
 
