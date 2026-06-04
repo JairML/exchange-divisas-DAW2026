@@ -1,8 +1,11 @@
 using Microsoft.EntityFrameworkCore;
+using X_Chang.API.Helpers;
 using X_Chang.CORE.Core.Interfaces;
 using X_Chang.CORE.Core.Services;
+using X_Chang.CORE.Core.Settings;
 using X_Chang.CORE.Infrastructure.Data;
 using X_Chang.CORE.Infrastructure.Repositories;
+using X_Chang.CORE.Infrastructure.Shared;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -39,6 +42,13 @@ builder.Services.AddScoped<IGestionUsuariosAdminRepository, GestionUsuariosAdmin
 builder.Services.AddScoped<IGestionUsuariosAdminService, GestionUsuariosAdminService>();
 builder.Services.AddScoped<IAuditoriaAdministrativaRepository, AuditoriaAdministrativaRepository>();
 builder.Services.AddScoped<IAuditoriaAdministrativaService, AuditoriaAdministrativaService>();
+
+// US-018: notificaciones por correo electrónico
+builder.Services.Configure<SmtpSettings>(builder.Configuration.GetSection("SmtpSettings"));
+builder.Services.AddScoped<IEmailService, EmailService>();
+builder.Services.AddScoped<INotificacionesCorreoRepository, NotificacionesCorreoRepository>();
+builder.Services.AddScoped<INotificacionesCorreoService, NotificacionesCorreoService>();
+builder.Services.AddHostedService<NotificacionesBackgroundService>();
 
 var app = builder.Build();
 
