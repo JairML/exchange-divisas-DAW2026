@@ -1,4 +1,5 @@
-﻿using System;
+﻿using Microsoft.EntityFrameworkCore;
+using System;
 using System.Collections.Generic;
 using X_Chang.CORE.Core.Entities;
 
@@ -83,7 +84,7 @@ public partial class ExchangeDivisasDbContext : DbContext
     {
         if (!optionsBuilder.IsConfigured)
             optionsBuilder.UseSqlServer("Server=localhost;Database=ExchangeDivisasDB;Trusted_Connection=True;TrustServerCertificate=True");
-        }
+    }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
