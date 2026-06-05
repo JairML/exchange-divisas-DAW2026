@@ -25,7 +25,7 @@ public static class ServiceCollectionExtensions
 
         services.AddScoped<IOrdenService, OrdenService>();
         services.AddScoped<IOfertaService, OfertaService>();
-        services.AddScoped<MatchingService>();
+        services.AddScoped<IMatchingService, MatchingService>();
 
         return services;
     }

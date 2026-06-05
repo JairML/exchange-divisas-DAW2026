@@ -1,11 +1,12 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using X_Chang.CORE.Core.Entities;
+using X_Chang.CORE.Core.Interfaces;
 using X_Chang.CORE.Infrastructure.Data;
 using X_Chang.CORE.Services;
 
 namespace X_Chang.CORE.Core.Services;
 
-public class MatchingService
+public class MatchingService : IMatchingService
 {
     private readonly ExchangeDivisasDbContext _context;
 
