@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Scalar.AspNetCore;
 using X_Chang.API.Helpers;
 using X_Chang.CORE.Core.Interfaces;
 using X_Chang.CORE.Core.Services;
@@ -67,6 +68,7 @@ var app = builder.Build();
 if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
+    app.MapScalarApiReference();
 }
 
 app.UseHttpsRedirection();
