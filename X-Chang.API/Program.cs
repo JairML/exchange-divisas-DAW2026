@@ -1,5 +1,7 @@
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.EntityFrameworkCore;
 using Scalar.AspNetCore;
+using X_Chang.API.Authentication;
 using X_Chang.API.Helpers;
 using X_Chang.CORE.Core.Interfaces;
 using X_Chang.CORE.Core.Services;
@@ -24,6 +26,13 @@ builder.Services.AddOpenApi();
 
 builder.Services.AddDbContext<ExchangeDivisasDbContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
+
+// US-001 / US-002: autenticacion por sesion opaca
+builder.Services.Configure<SessionSettings>(builder.Configuration.GetSection("SessionSettings"));
+builder.Services.AddScoped<IAuthRepository, AuthRepository>();
+builder.Services.AddScoped<IAuthService, AuthService>();
+builder.Services.AddAuthentication("Session")
+    .AddScheme<AuthenticationSchemeOptions, SessionAuthHandler>("Session", null);
 
 // Repositorios base
 builder.Services.AddScoped<IUsuarioRepository, UsuarioRepository>();
@@ -73,6 +82,7 @@ if (app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 app.UseCors("dev");
+app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
 

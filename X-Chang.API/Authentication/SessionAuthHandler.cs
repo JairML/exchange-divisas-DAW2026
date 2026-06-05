@@ -1,8 +1,8 @@
-﻿using Microsoft.AspNetCore.Authentication;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Options;
 using System.Security.Claims;
 using System.Text.Encodings.Web;
+using Microsoft.AspNetCore.Authentication;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using X_Chang.CORE.Infrastructure.Data;
 
 namespace X_Chang.API.Authentication;
@@ -23,8 +23,8 @@ public class SessionAuthHandler : AuthenticationHandler<AuthenticationSchemeOpti
 
     protected override async Task<AuthenticateResult> HandleAuthenticateAsync()
     {
-        var authHeader = Request.Headers.Authorization.ToString();
-        if (string.IsNullOrEmpty(authHeader) || !authHeader.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
+        var authHeader = Request.Headers.Authorization.FirstOrDefault();
+        if (authHeader == null || !authHeader.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
             return AuthenticateResult.NoResult();
 
         var token = authHeader["Bearer ".Length..].Trim();
@@ -32,26 +32,27 @@ public class SessionAuthHandler : AuthenticationHandler<AuthenticationSchemeOpti
             return AuthenticateResult.NoResult();
 
         var sesion = await _context.SesionesUsuario
-            .Include(s => s.Usuario)
-            .ThenInclude(u => u.Rol)
-            .FirstOrDefaultAsync(s =>
-                s.TokenSesion == token &&
-                s.Estado == "Activa" &&
-                s.FechaExpiracion > DateTime.UtcNow);
+            .Include(s => s.Usuario).ThenInclude(u => u.Rol)
+            .FirstOrDefaultAsync(s => s.TokenSesion == token && s.Estado == "Activa");
 
-        if (sesion == null)
-            return AuthenticateResult.Fail("Token inválido o expirado.");
+        if (sesion == null || sesion.FechaExpiracion < DateTime.UtcNow)
+            return AuthenticateResult.Fail("Token de sesión inválido o expirado.");
+
+        if (sesion.Usuario.Estado != "Activo")
+            return AuthenticateResult.Fail("La cuenta no está activa.");
 
         var claims = new[]
         {
-            new Claim(ClaimTypes.NameIdentifier, sesion.Usuario.UsuarioId.ToString()),
-            new Claim(ClaimTypes.Name, sesion.Usuario.NombreUsuario),
-            new Claim(ClaimTypes.Email, sesion.Usuario.CorreoElectronico),
-            new Claim(ClaimTypes.Role, sesion.Usuario.Rol.Nombre)
+            new Claim(ClaimTypes.NameIdentifier, sesion.UsuarioId.ToString()),
+            new Claim("UsuarioId", sesion.UsuarioId.ToString()),
+            new Claim("NombreUsuario", sesion.Usuario.NombreUsuario),
+            new Claim("CorreoElectronico", sesion.Usuario.CorreoElectronico),
+            new Claim("Rol", sesion.Usuario.Rol.Nombre),
+            new Claim("TemaVisual", sesion.Usuario.TemaVisual),
         };
 
         var identity = new ClaimsIdentity(claims, Scheme.Name);
-        var ticket = new AuthenticationTicket(new ClaimsPrincipal(identity), Scheme.Name);
-        return AuthenticateResult.Success(ticket);
+        var principal = new ClaimsPrincipal(identity);
+        return AuthenticateResult.Success(new AuthenticationTicket(principal, Scheme.Name));
     }
 }

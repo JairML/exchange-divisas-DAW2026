@@ -54,4 +54,17 @@ public class SesionUsuarioRepository : ISesionUsuarioRepository
         return await _context.SesionesUsuario
             .AnyAsync(s => s.TokenSesion == tokenSesion && s.Estado == "Activa");
     }
+
+    public async Task CerrarSesionesActivasDeUsuarioAsync(int usuarioId)
+    {
+        var sesiones = await _context.SesionesUsuario
+            .Where(s => s.UsuarioId == usuarioId && s.Estado == "Activa")
+            .ToListAsync();
+        foreach (var s in sesiones)
+        {
+            s.Estado = "Cerrada";
+            s.FechaCierre = DateTime.UtcNow;
+        }
+        await _context.SaveChangesAsync();
+    }
 }
