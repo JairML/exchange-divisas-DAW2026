@@ -1,4 +1,4 @@
-using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Mvc;
 using X_Chang.CORE.Core.DTOs.CompraInmediata;
 using X_Chang.CORE.Core.Interfaces;
 
@@ -9,17 +9,10 @@ namespace X_Chang.API.Controllers
     public class CompraInmediataController : ControllerBase
     {
         private readonly ICompraInmediataService _service;
-        private readonly ISesionUsuarioRepository _sesionRepo;
-        private readonly INotificacionesCorreoService _notifService;
 
-        public CompraInmediataController(
-            ICompraInmediataService service,
-            ISesionUsuarioRepository sesionRepo,
-            INotificacionesCorreoService notifService)
+        public CompraInmediataController(ICompraInmediataService service)
         {
             _service = service;
-            _sesionRepo = sesionRepo;
-            _notifService = notifService;
         }
 
         private string ObtenerTokenSesion()
@@ -67,20 +60,6 @@ namespace X_Chang.API.Controllers
                     await _service.ConfirmarCompraNormalAsync(
                         token,
                         request);
-
-                var sesion = await _sesionRepo.ObtenerSesionActivaAsync(token);
-                if (sesion != null)
-                {
-                    await _notifService.EncolarAsync(
-                        sesion.UsuarioId,
-                        "CompraInmediata",
-                        $"Compra inmediata ejecutada: {resultado.MonedaOrigen} → {resultado.MonedaDestino}",
-                        $"Tu compra de {resultado.CantidadEjecutada} {resultado.MonedaDestino} fue ejecutada exitosamente. " +
-                        $"Total pagado: {resultado.TotalPagado} {resultado.MonedaOrigen}. " +
-                        $"Estado: {resultado.Estado}. Fecha: {resultado.FechaOperacion:dd/MM/yyyy HH:mm}.",
-                        "OperacionInmediata",
-                        resultado.OperacionInmediataId);
-                }
 
                 return Ok(resultado);
             }
@@ -178,20 +157,6 @@ namespace X_Chang.API.Controllers
                     await _service.ConfirmarCompraPorRutaAsync(
                         token,
                         request);
-
-                var sesion = await _sesionRepo.ObtenerSesionActivaAsync(token);
-                if (sesion != null)
-                {
-                    await _notifService.EncolarAsync(
-                        sesion.UsuarioId,
-                        "CompraInmediataMejorRuta",
-                        $"Compra por mejor ruta ejecutada: {resultado.MonedaOrigen} → {resultado.MonedaDestino}",
-                        $"Tu compra por mejor ruta de {resultado.CantidadEjecutada} {resultado.MonedaDestino} fue ejecutada exitosamente. " +
-                        $"Total pagado: {resultado.TotalPagado} {resultado.MonedaOrigen}. " +
-                        $"Estado: {resultado.Estado}. Fecha: {resultado.FechaOperacion:dd/MM/yyyy HH:mm}.",
-                        "OperacionInmediata",
-                        resultado.OperacionInmediataId);
-                }
 
                 return Ok(resultado);
             }
