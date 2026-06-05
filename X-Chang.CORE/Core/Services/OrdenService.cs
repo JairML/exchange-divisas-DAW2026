@@ -17,9 +17,10 @@ public class OrdenService : IOrdenService
         o.PrecioUnitario, o.TotalComprometido, o.TotalEjecutado,
         o.Estado, o.FechaCreacion, o.FechaActualizacion);
 
-    public OrdenService(ExchangeDivisasDbContext context)
+    public OrdenService(ExchangeDivisasDbContext context, IMatchingService matching)
     {
         _context = context;
+        _matching = matching;
     }
 
     public async Task<LibroOrdenesDto> ObtenerLibroOrdenesAsync(int parMonedaId)
