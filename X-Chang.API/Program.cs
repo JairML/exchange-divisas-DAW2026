@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.EntityFrameworkCore;
+using Scalar.AspNetCore;
 using X_Chang.API.Authentication;
 using X_Chang.CORE.Core.Interfaces;
 using X_Chang.CORE.Core.Services;
@@ -9,8 +10,9 @@ using X_Chang.CORE.Infrastructure.Repositories;
 
 var builder = WebApplication.CreateBuilder(args);
 
-builder.Services.AddTransient<ICancelacionRepository, CancelacionRepository>(); // US-022
-builder.Services.AddTransient<ICancelacionService, CancelacionService>();        // US-022
+// TODO US-022: descomentar cuando se implementen en CORE
+// builder.Services.AddTransient<ICancelacionRepository, CancelacionRepository>();
+// builder.Services.AddTransient<ICancelacionService, CancelacionService>();
 
 // US-001 / US-002: autenticación por sesión opaca
 builder.Services.Configure<SessionSettings>(builder.Configuration.GetSection("SessionSettings"));
@@ -38,17 +40,20 @@ builder.Services.AddOpenApi();
 builder.Services.AddDbContext<ExchangeDivisasDbContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
 
-builder.Services.AddScoped<IUsuarioRepository, UsuarioRepository>();
+// TODO: descomentar cuando se implemente IUsuarioRepository en CORE
+// builder.Services.AddScoped<IUsuarioRepository, UsuarioRepository>();
 builder.Services.AddScoped<ISesionUsuarioRepository, SesionUsuarioRepository>();
-builder.Services.AddScoped<IConfiguracionUsuarioService, ConfiguracionUsuarioService>();
+// TODO: descomentar cuando se implemente ConfiguracionUsuarioService en CORE
+// builder.Services.AddScoped<IConfiguracionUsuarioService, ConfiguracionUsuarioService>();
 
 // US-004: visualización de órdenes y ofertas activas
 builder.Services.AddScoped<IOrdenRepository, OrdenRepository>();
 builder.Services.AddScoped<IOfertaRepository, OfertaRepository>();
 builder.Services.AddScoped<IOrdenService, OrdenService>();
 builder.Services.AddScoped<IOfertaService, OfertaService>();
-builder.Services.AddScoped<ICompraInmediataRepository, CompraInmediataRepository>();
-builder.Services.AddScoped<ICompraInmediataService, CompraInmediataService>();
+// TODO: descomentar cuando se implementen en CORE
+// builder.Services.AddScoped<ICompraInmediataRepository, CompraInmediataRepository>();
+// builder.Services.AddScoped<ICompraInmediataService, CompraInmediataService>();
 builder.Services.AddScoped<ISesionUsuarioRepository, SesionUsuarioRepository>();
 
 var app = builder.Build();
@@ -56,6 +61,7 @@ var app = builder.Build();
 if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
+    app.MapScalarApiReference();
 }
 
 app.UseHttpsRedirection();
