@@ -1,7 +1,6 @@
-﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.Security.Claims;
-using X_Chang.CORE.Core.DTOs;
 using X_Chang.CORE.Core.Interfaces;
 using X_Chang.CORE.DTOs;
 
@@ -20,6 +19,13 @@ public class OfertasController : ControllerBase
     }
 
     private int UsuarioId => int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+
+    [HttpGet]
+    public async Task<IActionResult> ListarOfertas([FromQuery] FiltroOfertasRequest filtro)
+    {
+        var resultado = await _ofertaService.ListarOfertasActivasAsync(UsuarioId, filtro);
+        return Ok(resultado);
+    }
 
     [HttpPost]
     public async Task<IActionResult> CrearOferta([FromBody] CrearOfertaRequest request)

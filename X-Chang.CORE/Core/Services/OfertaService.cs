@@ -17,6 +17,31 @@ public class OfertaService : IOfertaService
         _matching = matching;
     }
 
+    public async Task<OfertasActivasResponseDto> ListarOfertasActivasAsync(int usuarioId, FiltroOfertasRequest filtro)
+    {
+        var query = _context.OfertasVenta
+            .Include(o => o.ParMoneda).ThenInclude(p => p.MonedaOrigen)
+            .Include(o => o.ParMoneda).ThenInclude(p => p.MonedaDestino)
+            .Where(o => o.UsuarioId == usuarioId);
+
+        if (filtro.Desde.HasValue)
+            query = query.Where(o => o.FechaCreacion >= filtro.Desde.Value);
+        if (filtro.Hasta.HasValue)
+            query = query.Where(o => o.FechaCreacion <= filtro.Hasta.Value);
+        if (!string.IsNullOrWhiteSpace(filtro.Estado))
+            query = query.Where(o => o.Estado == filtro.Estado);
+
+        var total = await query.CountAsync();
+        var rows = await query
+            .OrderByDescending(o => o.FechaCreacion)
+            .Skip((filtro.Pagina - 1) * filtro.TamanoPagina)
+            .Take(filtro.TamanoPagina)
+            .ToListAsync();
+
+        var ofertas = rows.Select(o => MapOfertaDto(o, o.ParMoneda)).ToList();
+        return new OfertasActivasResponseDto(ofertas, total, filtro.Pagina, filtro.TamanoPagina);
+    }
+
     public async Task<OfertaDto> CrearOfertaVentaAsync(int usuarioId, CrearOfertaRequest request)
     {
         if (request.Cantidad <= 0 || request.PrecioUnitario <= 0)

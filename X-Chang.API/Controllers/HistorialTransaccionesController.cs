@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using X_Chang.CORE.Core.DTOs.HistorialTransacciones;
 using X_Chang.CORE.Core.Interfaces;
@@ -6,6 +7,7 @@ namespace X_Chang.API.Controllers
 {
     [ApiController]
     [Route("api/historial-transacciones")]
+    [Authorize]
     public class HistorialTransaccionesController : ControllerBase
     {
         private readonly IHistorialTransaccionesService _service;
@@ -17,22 +19,19 @@ namespace X_Chang.API.Controllers
 
         private string ObtenerTokenSesion()
         {
-            if (!Request.Headers.TryGetValue("tokenSesion", out var token))
+            var authHeader = Request.Headers.Authorization.FirstOrDefault();
+            if (authHeader == null || !authHeader.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
                 throw new UnauthorizedAccessException("No se envió el token de sesión.");
-
-            return token.ToString();
+            return authHeader["Bearer ".Length..].Trim();
         }
 
         [HttpGet]
-        public async Task<IActionResult> ObtenerHistorial(
-            [FromQuery] HistorialTransaccionesRequestDto request)
+        public async Task<IActionResult> ObtenerHistorial([FromQuery] HistorialTransaccionesRequestDto request)
         {
             try
             {
                 var token = ObtenerTokenSesion();
-
                 var resultado = await _service.ObtenerHistorialAsync(token, request);
-
                 return Ok(resultado);
             }
             catch (UnauthorizedAccessException ex)
@@ -54,10 +53,7 @@ namespace X_Chang.API.Controllers
             try
             {
                 var token = ObtenerTokenSesion();
-
-                var resultado = await _service.ObtenerParaExportarAsync(
-                    token, fechaDesde, fechaHasta, columna);
-
+                var resultado = await _service.ObtenerParaExportarAsync(token, fechaDesde, fechaHasta, columna);
                 return Ok(resultado);
             }
             catch (UnauthorizedAccessException ex)

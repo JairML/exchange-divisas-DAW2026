@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.Security.Claims;
 using X_Chang.CORE.Core.Interfaces;
@@ -20,6 +20,37 @@ public class OrdenesController : ControllerBase
 
     private int UsuarioId => int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
 
+    [HttpGet("{id:int}")]
+    public async Task<IActionResult> ObtenerOrden(int id)
+    {
+        var orden = await _ordenService.ObtenerOrdenPorIdAsync(UsuarioId, id);
+        if (orden == null) return NotFound(new { error = "Orden no encontrada." });
+        return Ok(orden);
+    }
+
+    [HttpGet]
+    public async Task<IActionResult> ListarOrdenes([FromQuery] FiltroOrdenesRequest filtro)
+    {
+        var resultado = await _ordenService.ListarOrdenesActivasAsync(UsuarioId, filtro);
+        return Ok(resultado);
+    }
+
+    [HttpGet("libro/{parMonedaId:int}")]
+    [AllowAnonymous]
+    public async Task<IActionResult> ObtenerLibroOrdenes(int parMonedaId)
+    {
+        var resultado = await _ordenService.ObtenerLibroOrdenesAsync(parMonedaId);
+        return Ok(resultado);
+    }
+
+    [HttpGet("libro/{parMonedaId:int}/detalle")]
+    [AllowAnonymous]
+    public async Task<IActionResult> ObtenerLibroOrdenesDetalle(int parMonedaId, [FromQuery] int limite = 10)
+    {
+        var resultado = await _ordenService.ObtenerLibroOrdenesDetalleAsync(parMonedaId, limite);
+        return Ok(resultado);
+    }
+
     [HttpPost]
     public async Task<IActionResult> CrearOrden([FromBody] CrearOrdenRequest request)
     {
@@ -36,10 +67,5 @@ public class OrdenesController : ControllerBase
         {
             return BadRequest(new { error = ex.Message });
         }
-    }
-
-    private object ObtenerOrden()
-    {
-        throw new NotImplementedException();
     }
 }

@@ -1,4 +1,6 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using System.Security.Claims;
 using X_Chang.CORE.Core.DTOs.VentaInmediata;
 using X_Chang.CORE.Core.Interfaces;
 
@@ -6,28 +8,28 @@ namespace X_Chang.API.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
+    [Authorize]
     public class VentaInmediataController : ControllerBase
     {
         private readonly IVentaInmediataService _service;
-        private readonly ISesionUsuarioRepository _sesionRepo;
         private readonly INotificacionesCorreoService _notifService;
 
         public VentaInmediataController(
             IVentaInmediataService service,
-            ISesionUsuarioRepository sesionRepo,
             INotificacionesCorreoService notifService)
         {
             _service = service;
-            _sesionRepo = sesionRepo;
             _notifService = notifService;
         }
 
+        private int UsuarioId => int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+
         private string ObtenerTokenSesion()
         {
-            if (!Request.Headers.TryGetValue("tokenSesion", out var token))
+            var authHeader = Request.Headers.Authorization.FirstOrDefault();
+            if (authHeader == null || !authHeader.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
                 throw new UnauthorizedAccessException("No se envió el token de sesión.");
-
-            return token.ToString();
+            return authHeader["Bearer ".Length..].Trim();
         }
 
         [HttpPost("resumen")]
@@ -57,19 +59,15 @@ namespace X_Chang.API.Controllers
                 var token = ObtenerTokenSesion();
                 var resultado = await _service.ConfirmarVentaNormalAsync(token, request);
 
-                var sesion = await _sesionRepo.ObtenerSesionActivaAsync(token);
-                if (sesion != null)
-                {
-                    await _notifService.EncolarAsync(
-                        sesion.UsuarioId,
-                        "VentaInmediata",
-                        $"Venta inmediata ejecutada: {resultado.MonedaOrigen} → {resultado.MonedaDestino}",
-                        $"Tu venta de {resultado.CantidadEjecutada} {resultado.MonedaOrigen} fue ejecutada exitosamente. " +
-                        $"Total recibido: {resultado.TotalRecibido} {resultado.MonedaDestino}. " +
-                        $"Estado: {resultado.Estado}. Fecha: {resultado.FechaOperacion:dd/MM/yyyy HH:mm}.",
-                        "OperacionInmediata",
-                        resultado.OperacionInmediataId);
-                }
+                await _notifService.EncolarAsync(
+                    UsuarioId,
+                    "VentaInmediata",
+                    $"Venta inmediata ejecutada: {resultado.MonedaOrigen} → {resultado.MonedaDestino}",
+                    $"Tu venta de {resultado.CantidadEjecutada} {resultado.MonedaOrigen} fue ejecutada exitosamente. " +
+                    $"Total recibido: {resultado.TotalRecibido} {resultado.MonedaDestino}. " +
+                    $"Estado: {resultado.Estado}. Fecha: {resultado.FechaOperacion:dd/MM/yyyy HH:mm}.",
+                    "OperacionInmediata",
+                    resultado.OperacionInmediataId);
 
                 return Ok(resultado);
             }
@@ -143,19 +141,15 @@ namespace X_Chang.API.Controllers
                 var token = ObtenerTokenSesion();
                 var resultado = await _service.ConfirmarVentaPorRutaAsync(token, request);
 
-                var sesion = await _sesionRepo.ObtenerSesionActivaAsync(token);
-                if (sesion != null)
-                {
-                    await _notifService.EncolarAsync(
-                        sesion.UsuarioId,
-                        "VentaInmediataMejorRuta",
-                        $"Venta por mejor ruta ejecutada: {resultado.MonedaOrigen} → {resultado.MonedaDestino}",
-                        $"Tu venta por mejor ruta de {resultado.CantidadEjecutada} {resultado.MonedaOrigen} fue ejecutada exitosamente. " +
-                        $"Total recibido: {resultado.TotalRecibido} {resultado.MonedaDestino}. " +
-                        $"Estado: {resultado.Estado}. Fecha: {resultado.FechaOperacion:dd/MM/yyyy HH:mm}.",
-                        "OperacionInmediata",
-                        resultado.OperacionInmediataId);
-                }
+                await _notifService.EncolarAsync(
+                    UsuarioId,
+                    "VentaInmediataMejorRuta",
+                    $"Venta por mejor ruta ejecutada: {resultado.MonedaOrigen} → {resultado.MonedaDestino}",
+                    $"Tu venta por mejor ruta de {resultado.CantidadEjecutada} {resultado.MonedaOrigen} fue ejecutada exitosamente. " +
+                    $"Total recibido: {resultado.TotalRecibido} {resultado.MonedaDestino}. " +
+                    $"Estado: {resultado.Estado}. Fecha: {resultado.FechaOperacion:dd/MM/yyyy HH:mm}.",
+                    "OperacionInmediata",
+                    resultado.OperacionInmediataId);
 
                 return Ok(resultado);
             }

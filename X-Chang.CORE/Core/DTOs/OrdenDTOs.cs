@@ -13,4 +13,7 @@ public record NivelOrdenDto(decimal Precio, decimal CantidadTotal, int NumeroOrd
 public record LibroOrdenEntradaDto(int Id, decimal Cantidad, decimal PrecioUnitario, DateTime FechaCreacion);
 public record LibroOrdenesDetalleDto(List<LibroOrdenEntradaDto> Compras, List<LibroOrdenEntradaDto> Ventas);
 
+public record FiltroOrdenesRequest(DateTime? Desde, DateTime? Hasta, int Pagina = 1, int TamanoPagina = 10);
+public record OrdenesActivasResponseDto(List<OrdenDto> Ordenes, int TotalRegistros, int Pagina, int TamanoPagina);
+
 

@@ -71,6 +71,39 @@ public class OrdenService : IOrdenService
         return new LibroOrdenesDetalleDto(compras, ventas);
     }
 
+    public async Task<OrdenDto?> ObtenerOrdenPorIdAsync(int usuarioId, int ordenId)
+    {
+        var orden = await _context.OrdenesCompra
+            .Include(o => o.ParMoneda).ThenInclude(p => p.MonedaOrigen)
+            .Include(o => o.ParMoneda).ThenInclude(p => p.MonedaDestino)
+            .FirstOrDefaultAsync(o => o.OrdenCompraId == ordenId && o.UsuarioId == usuarioId);
+
+        return orden == null ? null : MapOrdenDto(orden, orden.ParMoneda);
+    }
+
+    public async Task<OrdenesActivasResponseDto> ListarOrdenesActivasAsync(int usuarioId, FiltroOrdenesRequest filtro)
+    {
+        var query = _context.OrdenesCompra
+            .Include(o => o.ParMoneda).ThenInclude(p => p.MonedaOrigen)
+            .Include(o => o.ParMoneda).ThenInclude(p => p.MonedaDestino)
+            .Where(o => o.UsuarioId == usuarioId);
+
+        if (filtro.Desde.HasValue)
+            query = query.Where(o => o.FechaCreacion >= filtro.Desde.Value);
+        if (filtro.Hasta.HasValue)
+            query = query.Where(o => o.FechaCreacion <= filtro.Hasta.Value);
+
+        var total = await query.CountAsync();
+        var rows = await query
+            .OrderByDescending(o => o.FechaCreacion)
+            .Skip((filtro.Pagina - 1) * filtro.TamanoPagina)
+            .Take(filtro.TamanoPagina)
+            .ToListAsync();
+
+        var ordenes = rows.Select(o => MapOrdenDto(o, o.ParMoneda)).ToList();
+        return new OrdenesActivasResponseDto(ordenes, total, filtro.Pagina, filtro.TamanoPagina);
+    }
+
     public async Task<OrdenDto> CrearOrdenCompraAsync(int usuarioId, CrearOrdenRequest request)
     {
         if (request.Cantidad <= 0 || request.PrecioUnitario <= 0)

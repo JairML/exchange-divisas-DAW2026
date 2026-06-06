@@ -71,6 +71,8 @@ builder.Services.AddScoped<IGestionUsuariosAdminRepository, GestionUsuariosAdmin
 builder.Services.AddScoped<IGestionUsuariosAdminService, GestionUsuariosAdminService>();
 builder.Services.AddScoped<IVentaInmediataRepository, VentaInmediataRepository>();
 builder.Services.AddScoped<IVentaInmediataService, VentaInmediataService>();
+builder.Services.AddScoped<IRetiroRepository, RetiroRepository>();
+builder.Services.AddScoped<IRetiroService, RetiroService>();
 
 var app = builder.Build();
 
