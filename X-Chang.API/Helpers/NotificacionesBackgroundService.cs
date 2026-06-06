@@ -2,8 +2,6 @@ using X_Chang.CORE.Core.Interfaces;
 
 namespace X_Chang.API.Helpers;
 
-// US-018: servicio en segundo plano que procesa correos pendientes cada 2 minutos.
-// Usa IServiceScopeFactory porque DbContext es Scoped y este servicio es Singleton.
 public class NotificacionesBackgroundService : BackgroundService
 {
     private readonly IServiceScopeFactory _scopeFactory;

@@ -8,7 +8,6 @@ using X_Chang.CORE.Core.Settings;
 
 namespace X_Chang.CORE.Infrastructure.Shared;
 
-// US-018: envío de correos vía SMTP usando MailKit.
 public class EmailService : IEmailService
 {
     private readonly SmtpSettings _smtp;

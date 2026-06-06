@@ -5,7 +5,6 @@ using X_Chang.CORE.Infrastructure.Data;
 
 namespace X_Chang.CORE.Infrastructure.Repositories;
 
-// US-018: acceso a datos de notificaciones de correo pendientes.
 public class NotificacionesCorreoRepository : INotificacionesCorreoRepository
 {
     private readonly ExchangeDivisasDbContext _context;

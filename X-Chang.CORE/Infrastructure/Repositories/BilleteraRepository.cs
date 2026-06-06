@@ -8,7 +8,6 @@ using X_Chang.CORE.Infrastructure.Data;
 
 namespace X_Chang.CORE.Infrastructure.Repositories
 {
-    // US-006: acceso a datos de la billetera virtual y sus saldos por moneda.
     public class BilleteraRepository : IBilleteraRepository
     {
         private readonly ExchangeDivisasDbContext _context;

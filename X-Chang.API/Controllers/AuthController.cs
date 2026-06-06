@@ -17,7 +17,6 @@ public class AuthController : ControllerBase
         _authService = authService;
     }
 
-    // US-001: registro de nuevo usuario.
     [HttpPost("register")]
     public async Task<IActionResult> Register([FromBody] RegisterRequestDto request)
     {
@@ -32,7 +31,6 @@ public class AuthController : ControllerBase
         }
     }
 
-    // US-002: inicio de sesion.
     [HttpPost("login")]
     public async Task<IActionResult> Login([FromBody] LoginRequestDto request)
     {
@@ -47,7 +45,6 @@ public class AuthController : ControllerBase
         }
     }
 
-    // US-002: cierre de sesion.
     [Authorize]
     [HttpPost("logout")]
     public async Task<IActionResult> Logout([FromBody] RefreshTokenRequestDto request)
@@ -59,7 +56,6 @@ public class AuthController : ControllerBase
         return NoContent();
     }
 
-    // US-002: renovacion de token.
     [HttpPost("refresh")]
     public async Task<IActionResult> Refresh([FromBody] RefreshTokenRequestDto request)
     {
@@ -74,7 +70,6 @@ public class AuthController : ControllerBase
         }
     }
 
-    // US-003: datos del usuario autenticado.
     [Authorize]
     [HttpGet("me")]
     public IActionResult GetMe()
@@ -92,7 +87,6 @@ public class AuthController : ControllerBase
         });
     }
 
-    // US-003: opciones de navegacion segun el rol.
     [Authorize]
     [HttpGet("menu")]
     public IActionResult GetMenu()

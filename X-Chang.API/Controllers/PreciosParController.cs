@@ -5,9 +5,6 @@ using X_Chang.CORE.Core.Interfaces;
 
 namespace X_Chang.API.Controllers
 {
-    // US-009, US-010, US-011: visualización de precios y pares de monedas.
-    // Todos los endpoints aceptan un usuario autenticado opcional (X-Usuario-Id / claim JWT).
-    // [Authorize] se habilitará cuando esté integrado el login (US-001/US-002).
     [Route("api/preciospares")]
     [ApiController]
     public class PreciosParController : ControllerBase
@@ -19,10 +16,6 @@ namespace X_Chang.API.Controllers
             _service = service;
         }
 
-        // ─── US-009 ──────────────────────────────────────────────────────────────
-        // GET api/preciospares/menu-principal
-        // Sin autenticar → serie histórica USD/EUR (1 gráfico).
-        // Autenticado   → 2 gráficos basados en la moneda principal y la última orden activa.
         [HttpGet("menu-principal")]
         public async Task<IActionResult> ObtenerMenuPrincipal()
         {
@@ -38,10 +31,6 @@ namespace X_Chang.API.Controllers
             }
         }
 
-        // ─── US-010 ──────────────────────────────────────────────────────────────
-        // GET api/preciospares
-        // Query params: monedaEntrega, monedaObtiene, criterio, direccion,
-        //               colapsarParesInversos, pagina, registrosPorPagina
         [HttpGet]
         public async Task<IActionResult> ObtenerListadoPares([FromQuery] FiltroParesMonedaDto filtro)
         {
@@ -57,10 +46,6 @@ namespace X_Chang.API.Controllers
             }
         }
 
-        // ─── US-011 ──────────────────────────────────────────────────────────────
-        // GET api/preciospares/serie/{monedaOrigen}/{monedaDestino}?rango=UltimoDia
-        // Devuelve indicadores actuales + serie histórica para el par indicado.
-        // rango: UltimoDia (default) | UltimaSemana | UltimoMes | UltimoAno | Total
         [HttpGet("serie/{monedaOrigen}/{monedaDestino}")]
         public async Task<IActionResult> ObtenerSerieHistorica(
             string monedaOrigen,

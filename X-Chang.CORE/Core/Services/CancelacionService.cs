@@ -6,7 +6,6 @@ using X_Chang.CORE.Core.Interfaces;
 
 namespace X_Chang.CORE.Core.Services
 {
-    // US-022: Cancelación de orden u oferta.
     public class CancelacionService : ICancelacionService
     {
         private readonly ICancelacionRepository _cancelacionRepository;

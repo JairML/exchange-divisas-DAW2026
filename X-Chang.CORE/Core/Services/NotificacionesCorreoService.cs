@@ -3,7 +3,6 @@ using X_Chang.CORE.Core.Interfaces;
 
 namespace X_Chang.CORE.Core.Services;
 
-// US-018: procesa las notificaciones pendientes y las envía por correo.
 public class NotificacionesCorreoService : INotificacionesCorreoService
 {
     private readonly INotificacionesCorreoRepository _repo;

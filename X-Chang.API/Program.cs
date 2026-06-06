@@ -27,14 +27,12 @@ builder.Services.AddOpenApi();
 builder.Services.AddDbContext<ExchangeDivisasDbContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
 
-// US-001 / US-002: autenticacion por sesion opaca
 builder.Services.Configure<SessionSettings>(builder.Configuration.GetSection("SessionSettings"));
 builder.Services.AddScoped<IAuthRepository, AuthRepository>();
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddAuthentication("Session")
     .AddScheme<AuthenticationSchemeOptions, SessionAuthHandler>("Session", null);
 
-// Repositorios base
 builder.Services.AddScoped<IUsuarioRepository, UsuarioRepository>();
 builder.Services.AddScoped<ISesionUsuarioRepository, SesionUsuarioRepository>();
 builder.Services.AddScoped<IBilleteraRepository, BilleteraRepository>();
@@ -43,7 +41,6 @@ builder.Services.AddScoped<IPreciosParRepository, PreciosParRepository>();
 builder.Services.AddScoped<IHistorialTransaccionesRepository, HistorialTransaccionesRepository>();
 builder.Services.AddScoped<INotificacionesCorreoRepository, NotificacionesCorreoRepository>();
 
-// Servicios de dominio
 builder.Services.AddScoped<IMatchingService, MatchingService>();
 builder.Services.AddScoped<IBilleteraService, BilleteraService>();
 builder.Services.AddScoped<IMonedaService, MonedaService>();
@@ -53,7 +50,6 @@ builder.Services.AddScoped<IOfertaService, OfertaService>();
 builder.Services.AddScoped<IHistorialTransaccionesService, HistorialTransaccionesService>();
 builder.Services.AddScoped<IConfiguracionUsuarioService, ConfiguracionUsuarioService>();
 
-// US-018: notificaciones por correo electronico
 builder.Services.Configure<SmtpSettings>(builder.Configuration.GetSection("SmtpSettings"));
 builder.Services.AddScoped<IEmailService, EmailService>();
 builder.Services.AddScoped<INotificacionesCorreoService, NotificacionesCorreoService>();
