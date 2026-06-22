@@ -9,12 +9,9 @@ using X_Chang.CORE.Core.Interfaces;
 
 namespace X_Chang.CORE.Core.Services
 {
-    // US-007: Depósito de dinero a la billetera.
     public class DepositoService : IDepositoService
     {
         private readonly IDepositoRepository _depositoRepository;
-
-        // Monto máximo por defecto si no estuviera definido en ConfiguracionSistema.
         private const decimal MaxMontoPorDefecto = 1000000m;
 
         public DepositoService(IDepositoRepository depositoRepository)
@@ -100,7 +97,6 @@ namespace X_Chang.CORE.Core.Services
             if (usuario == null)
                 return ("Usuario no encontrado", null, null, null);
 
-            // US-020: un usuario restringido no puede operar.
             if (usuario.Estado == "Restringido")
                 return ("Su cuenta se encuentra restringida y no puede realizar depósitos", null, null, null);
 

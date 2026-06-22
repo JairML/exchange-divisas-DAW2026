@@ -1,4 +1,5 @@
-﻿using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
 using X_Chang.CORE.Core.DTOs.GestionUsuarios;
 using X_Chang.CORE.Core.Interfaces;
 
@@ -6,6 +7,7 @@ namespace X_Chang.API.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
+    [Authorize]
     public class GestionUsuariosAdminController : ControllerBase
     {
         private readonly IGestionUsuariosAdminService _service;
@@ -17,10 +19,17 @@ namespace X_Chang.API.Controllers
 
         private string ObtenerTokenSesion()
         {
-            if (!Request.Headers.TryGetValue("tokenSesion", out var token))
-                throw new UnauthorizedAccessException("No se envió el token de sesión.");
+            var authHeader = Request.Headers.Authorization.FirstOrDefault();
+            if (!string.IsNullOrWhiteSpace(authHeader) &&
+                authHeader.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
+            {
+                return authHeader["Bearer ".Length..].Trim();
+            }
 
-            return token.ToString();
+            if (Request.Headers.TryGetValue("tokenSesion", out var tokenSesion))
+                return tokenSesion.ToString();
+
+            throw new UnauthorizedAccessException("No se envió el token de sesión.");
         }
 
         [HttpGet("usuarios")]
@@ -62,9 +71,7 @@ namespace X_Chang.API.Controllers
         }
 
         [HttpPost("usuarios/{usuarioId}/restringir")]
-        public async Task<IActionResult> RestringirUsuario(
-            int usuarioId,
-            [FromBody] CambiarEstadoUsuarioRequestDto request)
+        public async Task<IActionResult> RestringirUsuario(int usuarioId, [FromBody] CambiarEstadoUsuarioRequestDto request)
         {
             try
             {
@@ -83,9 +90,7 @@ namespace X_Chang.API.Controllers
         }
 
         [HttpPost("usuarios/{usuarioId}/habilitar")]
-        public async Task<IActionResult> HabilitarUsuario(
-            int usuarioId,
-            [FromBody] CambiarEstadoUsuarioRequestDto request)
+        public async Task<IActionResult> HabilitarUsuario(int usuarioId, [FromBody] CambiarEstadoUsuarioRequestDto request)
         {
             try
             {

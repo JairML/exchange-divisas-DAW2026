@@ -1,14 +1,13 @@
-using System.Threading.Tasks;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using X_Chang.API.Helpers;
+using System.Security.Claims;
 using X_Chang.CORE.Core.Interfaces;
 
 namespace X_Chang.API.Controllers
 {
-    // US-006: Billetera virtual y barra de monedas.
-    // [Authorize] se habilitará cuando esté integrado el login (US-001/US-002).
     [Route("api/[controller]")]
     [ApiController]
+    [Authorize]
     public class BilleteraController : ControllerBase
     {
         private readonly IBilleteraService _billeteraService;
@@ -18,15 +17,12 @@ namespace X_Chang.API.Controllers
             _billeteraService = billeteraService;
         }
 
-        // GET api/Billetera -> resumen de la billetera del usuario autenticado.
+        private int UsuarioId => int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+
         [HttpGet]
         public async Task<IActionResult> Get()
         {
-            var usuarioId = this.GetUsuarioId();
-            if (usuarioId == null)
-                return Unauthorized();
-
-            var resumen = await _billeteraService.GetBilletera(usuarioId.Value);
+            var resumen = await _billeteraService.GetBilletera(UsuarioId);
             return Ok(resumen);
         }
     }

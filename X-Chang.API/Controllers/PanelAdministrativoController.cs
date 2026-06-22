@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using X_Chang.CORE.Core.DTOs.Mercado;
 using X_Chang.CORE.Core.Interfaces;
@@ -6,6 +7,7 @@ namespace X_Chang.API.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
+    [Authorize]
     public class PanelAdministrativoController : ControllerBase
     {
         private readonly IMercadoService _service;
@@ -17,10 +19,17 @@ namespace X_Chang.API.Controllers
 
         private string ObtenerTokenSesion()
         {
-            if (!Request.Headers.TryGetValue("tokenSesion", out var token))
-                throw new UnauthorizedAccessException("No se envió el token de sesión.");
+            var authHeader = Request.Headers.Authorization.FirstOrDefault();
+            if (!string.IsNullOrWhiteSpace(authHeader) &&
+                authHeader.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
+            {
+                return authHeader["Bearer ".Length..].Trim();
+            }
 
-            return token.ToString();
+            if (Request.Headers.TryGetValue("tokenSesion", out var tokenSesion))
+                return tokenSesion.ToString();
+
+            throw new UnauthorizedAccessException("No se envió el token de sesión.");
         }
 
         [HttpGet("resumen")]

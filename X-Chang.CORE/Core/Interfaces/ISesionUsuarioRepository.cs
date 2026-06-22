@@ -1,6 +1,3 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Text;
 using X_Chang.CORE.Core.Entities;
 
 namespace X_Chang.CORE.Core.Interfaces
@@ -17,5 +14,7 @@ namespace X_Chang.CORE.Core.Interfaces
         Task<bool> CerrarSesionAsync(string tokenSesion);
 
         Task<bool> ExisteSesionActivaAsync(string tokenSesion);
+
+        Task CerrarSesionesActivasDeUsuarioAsync(int usuarioId);
     }
 }

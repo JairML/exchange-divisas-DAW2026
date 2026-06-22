@@ -1,4 +1,6 @@
-﻿using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
+using System.Security.Claims;
 using X_Chang.CORE.Core.DTOs.VentaInmediata;
 using X_Chang.CORE.Core.Interfaces;
 
@@ -6,21 +8,35 @@ namespace X_Chang.API.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
+    [Authorize]
     public class VentaInmediataController : ControllerBase
     {
         private readonly IVentaInmediataService _service;
+        private readonly INotificacionesCorreoService _notifService;
 
-        public VentaInmediataController(IVentaInmediataService service)
+        public VentaInmediataController(
+            IVentaInmediataService service,
+            INotificacionesCorreoService notifService)
         {
             _service = service;
+            _notifService = notifService;
         }
+
+        private int UsuarioId => int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
 
         private string ObtenerTokenSesion()
         {
-            if (!Request.Headers.TryGetValue("tokenSesion", out var token))
-                throw new UnauthorizedAccessException("No se envió el token de sesión.");
+            var authHeader = Request.Headers.Authorization.FirstOrDefault();
+            if (!string.IsNullOrWhiteSpace(authHeader) &&
+                authHeader.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
+            {
+                return authHeader["Bearer ".Length..].Trim();
+            }
 
-            return token.ToString();
+            if (Request.Headers.TryGetValue("tokenSesion", out var tokenSesion))
+                return tokenSesion.ToString();
+
+            throw new UnauthorizedAccessException("No se envió el token de sesión.");
         }
 
         [HttpPost("resumen")]
@@ -49,6 +65,17 @@ namespace X_Chang.API.Controllers
             {
                 var token = ObtenerTokenSesion();
                 var resultado = await _service.ConfirmarVentaNormalAsync(token, request);
+
+                await _notifService.EncolarAsync(
+                    UsuarioId,
+                    "VentaInmediata",
+                    $"Venta inmediata ejecutada: {resultado.MonedaOrigen} → {resultado.MonedaDestino}",
+                    $"Tu venta de {resultado.CantidadEjecutada} {resultado.MonedaOrigen} fue ejecutada exitosamente. " +
+                    $"Total recibido: {resultado.TotalRecibido} {resultado.MonedaDestino}. " +
+                    $"Estado: {resultado.Estado}. Fecha: {resultado.FechaOperacion:dd/MM/yyyy HH:mm}.",
+                    "OperacionInmediata",
+                    resultado.OperacionInmediataId);
+
                 return Ok(resultado);
             }
             catch (UnauthorizedAccessException ex)
@@ -120,6 +147,17 @@ namespace X_Chang.API.Controllers
             {
                 var token = ObtenerTokenSesion();
                 var resultado = await _service.ConfirmarVentaPorRutaAsync(token, request);
+
+                await _notifService.EncolarAsync(
+                    UsuarioId,
+                    "VentaInmediataMejorRuta",
+                    $"Venta por mejor ruta ejecutada: {resultado.MonedaOrigen} → {resultado.MonedaDestino}",
+                    $"Tu venta por mejor ruta de {resultado.CantidadEjecutada} {resultado.MonedaOrigen} fue ejecutada exitosamente. " +
+                    $"Total recibido: {resultado.TotalRecibido} {resultado.MonedaDestino}. " +
+                    $"Estado: {resultado.Estado}. Fecha: {resultado.FechaOperacion:dd/MM/yyyy HH:mm}.",
+                    "OperacionInmediata",
+                    resultado.OperacionInmediataId);
+
                 return Ok(resultado);
             }
             catch (UnauthorizedAccessException ex)

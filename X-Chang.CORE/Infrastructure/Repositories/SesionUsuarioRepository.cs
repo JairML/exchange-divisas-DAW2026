@@ -1,6 +1,3 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Text;
 using Microsoft.EntityFrameworkCore;
 using X_Chang.CORE.Core.Entities;
 using X_Chang.CORE.Core.Interfaces;
@@ -12,21 +9,20 @@ namespace X_Chang.CORE.Infrastructure.Repositories
     {
         private readonly ExchangeDivisasDbContext _context;
 
-        public SesionUsuarioRepository(
-            ExchangeDivisasDbContext context)
+        public SesionUsuarioRepository(ExchangeDivisasDbContext context)
         {
             _context = context;
         }
 
-        public async Task<SesionesUsuario?> ObtenerSesionActivaAsync(
-            string tokenSesion)
+        public async Task<SesionesUsuario?> ObtenerSesionActivaAsync(string tokenSesion)
         {
             return await _context.SesionesUsuario
                 .Include(s => s.Usuario)
+                    .ThenInclude(u => u.Rol)
                 .FirstOrDefaultAsync(s =>
                     s.TokenSesion == tokenSesion &&
                     s.Estado == "Activa" &&
-                    s.FechaExpiracion > DateTime.Now);
+                    s.FechaExpiracion > DateTime.UtcNow);
         }
 
         public async Task<SesionesUsuario> CrearSesionAsync(
@@ -38,20 +34,17 @@ namespace X_Chang.CORE.Infrastructure.Repositories
             {
                 UsuarioId = usuarioId,
                 TokenSesion = tokenSesion,
-                FechaInicio = DateTime.Now,
+                FechaInicio = DateTime.UtcNow,
                 FechaExpiracion = fechaExpiracion,
                 Estado = "Activa"
             };
 
             _context.SesionesUsuario.Add(sesion);
-
             await _context.SaveChangesAsync();
-
             return sesion;
         }
 
-        public async Task<bool> CerrarSesionAsync(
-            string tokenSesion)
+        public async Task<bool> CerrarSesionAsync(string tokenSesion)
         {
             var sesion = await _context.SesionesUsuario
                 .FirstOrDefaultAsync(s =>
@@ -62,21 +55,33 @@ namespace X_Chang.CORE.Infrastructure.Repositories
                 return false;
 
             sesion.Estado = "Cerrada";
-            sesion.FechaCierre = DateTime.Now;
-
+            sesion.FechaCierre = DateTime.UtcNow;
             await _context.SaveChangesAsync();
-
             return true;
         }
 
-        public async Task<bool> ExisteSesionActivaAsync(
-            string tokenSesion)
+        public async Task<bool> ExisteSesionActivaAsync(string tokenSesion)
         {
             return await _context.SesionesUsuario
                 .AnyAsync(s =>
                     s.TokenSesion == tokenSesion &&
                     s.Estado == "Activa" &&
-                    s.FechaExpiracion > DateTime.Now);
+                    s.FechaExpiracion > DateTime.UtcNow);
+        }
+
+        public async Task CerrarSesionesActivasDeUsuarioAsync(int usuarioId)
+        {
+            var sesiones = await _context.SesionesUsuario
+                .Where(s => s.UsuarioId == usuarioId && s.Estado == "Activa")
+                .ToListAsync();
+
+            foreach (var sesion in sesiones)
+            {
+                sesion.Estado = "Cerrada";
+                sesion.FechaCierre = DateTime.UtcNow;
+            }
+
+            await _context.SaveChangesAsync();
         }
     }
 }
