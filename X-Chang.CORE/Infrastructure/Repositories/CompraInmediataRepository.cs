@@ -609,27 +609,30 @@ namespace X_Chang.CORE.Infrastructure.Repositories
         }
 
         private async Task SincronizarOrdenEspejoDesdeOfertaAsync(
-            OfertasVenta oferta,
-            decimal cantidadVendida,
-            decimal totalRecibido)
-        {
-            if (oferta.OrdenCompraEspejoId == null)
-                throw new InvalidOperationException("La oferta no tiene orden espejo asociada.");
+			OfertasVenta oferta,
+			decimal cantidadVendida,
+			decimal totalRecibido)
+		{
+			if (oferta.OrdenCompraEspejoId == null)
+				return;
 
-            var ordenEspejo = await _context.OrdenesCompra
-                .FirstAsync(o => o.OrdenCompraId == oferta.OrdenCompraEspejoId.Value);
+			var ordenEspejo = await _context.OrdenesCompra
+				.FirstOrDefaultAsync(o => o.OrdenCompraId == oferta.OrdenCompraEspejoId.Value);
 
-            ordenEspejo.CantidadObtenida += totalRecibido;
-            ordenEspejo.CantidadPendiente -= totalRecibido;
-            ordenEspejo.TotalEjecutado += cantidadVendida;
-            ordenEspejo.FechaActualizacion = DateTime.Now;
+			if (ordenEspejo == null)
+				return;
 
-            if (ordenEspejo.CantidadPendiente < 0)
-                ordenEspejo.CantidadPendiente = 0;
+			ordenEspejo.CantidadOriginal = oferta.TotalRecibido + (oferta.CantidadPendiente * oferta.PrecioUnitario);
+			ordenEspejo.CantidadObtenida = oferta.TotalRecibido;
+			ordenEspejo.CantidadPendiente = oferta.CantidadPendiente * oferta.PrecioUnitario;
+			ordenEspejo.TotalComprometido = oferta.CantidadOriginal;
+			ordenEspejo.TotalEjecutado = oferta.CantidadVendida;
+			ordenEspejo.FechaActualizacion = DateTime.Now;
 
-            ordenEspejo.Estado = ordenEspejo.CantidadPendiente == 0
-                ? "Completada"
-                : "Parcialmente ejecutada";
-        }
+			if (ordenEspejo.CantidadPendiente < 0)
+				ordenEspejo.CantidadPendiente = 0;
+
+			ordenEspejo.Estado = oferta.Estado;
+		}
     }
 }

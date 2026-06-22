@@ -46,57 +46,87 @@ namespace X_Chang.CORE.Infrastructure.Repositories
         }
 
         public async Task<(int cancelacionId, decimal nuevoSaldo, DateTime fecha)?> EjecutarCancelacion(
-            string tipoOperacion,
-            int referenciaId,
-            int usuarioId,
-            int parMonedaId,
-            int monedaReembolsoId,
-            decimal montoReembolsado,
-            decimal cantidadEjecutada,
-            decimal cantidadCancelada,
-            string correoDestino)
+    string tipoOperacion,
+    int referenciaId,
+    int usuarioId,
+    int parMonedaId,
+    int monedaReembolsoId,
+    decimal montoReembolsado,
+    decimal cantidadEjecutada,
+    decimal cantidadCancelada,
+    string correoDestino)
         {
             var ahora = DateTime.Now;
             var esOrden = tipoOperacion == "Orden de compra";
 
             using var tx = await _context.Database.BeginTransactionAsync();
 
-            // 1) Volver a leer la operación DENTRO de la transacción y revalidar su estado.
-            //    Esto evita la condición de carrera: si entre la confirmación y la ejecución
-            //    la operación ya se completó o se canceló, no se debe volver a cancelar.
             int? ordenCompraId = null;
             int? ofertaVentaId = null;
 
             if (esOrden)
             {
                 var orden = await _context.OrdenesCompra
-                    .FirstOrDefaultAsync(o => o.OrdenCompraId == referenciaId && o.UsuarioId == usuarioId);
+                    .FirstOrDefaultAsync(o =>
+                        o.OrdenCompraId == referenciaId &&
+                        o.UsuarioId == usuarioId);
+
                 if (orden == null || !EstadosCancelables.Contains(orden.Estado))
                 {
                     await tx.RollbackAsync();
                     return null;
                 }
+
                 orden.Estado = "Cancelada";
                 orden.FechaCancelacion = ahora;
                 orden.FechaActualizacion = ahora;
                 ordenCompraId = orden.OrdenCompraId;
+
+                var ofertaEspejo = await _context.OfertasVenta
+                    .FirstOrDefaultAsync(o => o.OrdenCompraEspejoId == orden.OrdenCompraId);
+
+                if (ofertaEspejo != null &&
+                    EstadosCancelables.Contains(ofertaEspejo.Estado))
+                {
+                    ofertaEspejo.Estado = "Cancelada";
+                    ofertaEspejo.FechaCancelacion = ahora;
+                    ofertaEspejo.FechaActualizacion = ahora;
+                }
             }
             else
             {
                 var oferta = await _context.OfertasVenta
-                    .FirstOrDefaultAsync(o => o.OfertaVentaId == referenciaId && o.UsuarioId == usuarioId);
+                    .FirstOrDefaultAsync(o =>
+                        o.OfertaVentaId == referenciaId &&
+                        o.UsuarioId == usuarioId);
+
                 if (oferta == null || !EstadosCancelables.Contains(oferta.Estado))
                 {
                     await tx.RollbackAsync();
                     return null;
                 }
+
                 oferta.Estado = "Cancelada";
                 oferta.FechaCancelacion = ahora;
                 oferta.FechaActualizacion = ahora;
                 ofertaVentaId = oferta.OfertaVentaId;
+
+                if (oferta.OrdenCompraEspejoId != null)
+                {
+                    var ordenEspejo = await _context.OrdenesCompra
+                        .FirstOrDefaultAsync(o =>
+                            o.OrdenCompraId == oferta.OrdenCompraEspejoId.Value);
+
+                    if (ordenEspejo != null &&
+                        EstadosCancelables.Contains(ordenEspejo.Estado))
+                    {
+                        ordenEspejo.Estado = "Cancelada";
+                        ordenEspejo.FechaCancelacion = ahora;
+                        ordenEspejo.FechaActualizacion = ahora;
+                    }
+                }
             }
 
-            // 2) Registrar la cancelación (CHECK de BD: exactamente una referencia no nula).
             var cancelacion = new CancelacionesOrdenOferta
             {
                 UsuarioId = usuarioId,
@@ -109,28 +139,35 @@ namespace X_Chang.CORE.Infrastructure.Repositories
                 MontoReembolsado = montoReembolsado,
                 FechaCancelacion = ahora
             };
-            _context.CancelacionesOrdenOferta.Add(cancelacion);
-            await _context.SaveChangesAsync(); // obtiene el CancelacionId generado
 
-            // 3) Reembolsar el saldo comprometido que no llegó a ejecutarse.
+            _context.CancelacionesOrdenOferta.Add(cancelacion);
+            await _context.SaveChangesAsync();
+
             decimal nuevoSaldo;
+
             if (montoReembolsado > 0m)
             {
                 var (_, posterior) = await MovimientoBilleteraHelper.Aplicar(
-                    _context, usuarioId, monedaReembolsoId, montoReembolsado,
-                    "Reembolso", "Cancelacion", cancelacion.CancelacionId);
+                    _context,
+                    usuarioId,
+                    monedaReembolsoId,
+                    montoReembolsado,
+                    "Reembolso",
+                    "Cancelacion",
+                    cancelacion.CancelacionId);
+
                 nuevoSaldo = posterior;
             }
             else
             {
-                // Sin reembolso: se devuelve el saldo actual de la moneda (0 si no existe).
                 nuevoSaldo = await _context.SaldosBilletera
-                    .Where(s => s.Billetera.UsuarioId == usuarioId && s.MonedaId == monedaReembolsoId)
+                    .Where(s =>
+                        s.Billetera.UsuarioId == usuarioId &&
+                        s.MonedaId == monedaReembolsoId)
                     .Select(s => s.SaldoDisponible)
                     .FirstOrDefaultAsync();
             }
 
-            // 4) Registrar en el historial de transacciones.
             _context.HistorialTransacciones.Add(new HistorialTransacciones
             {
                 UsuarioId = usuarioId,
@@ -143,7 +180,6 @@ namespace X_Chang.CORE.Infrastructure.Repositories
                 MetodoEjecucion = null
             });
 
-            // 5) Encolar la notificación de correo (el envío real es responsabilidad de US-018).
             var tipoNotificacionId = await _context.TiposNotificacion
                 .Where(t => t.Nombre == "Cancelación")
                 .Select(t => (int?)t.TipoNotificacionId)
@@ -164,7 +200,6 @@ namespace X_Chang.CORE.Infrastructure.Repositories
             });
 
             await _context.SaveChangesAsync();
-
             await tx.CommitAsync();
 
             return (cancelacion.CancelacionId, nuevoSaldo, ahora);

@@ -36,6 +36,46 @@ namespace X_Chang.CORE.Core.Services
             return await _repository.BuscarAuditoriaAsync(filtro);
         }
 
+        private static string ConstruirHtmlExcel(List<AuditoriaAdminRegistroDto> registros)
+        {
+            var sb = new StringBuilder();
+
+            sb.AppendLine("<html>");
+            sb.AppendLine("<head>");
+            sb.AppendLine("<meta charset=\"utf-8\" />");
+            sb.AppendLine("</head>");
+            sb.AppendLine("<body>");
+            sb.AppendLine("<table border=\"1\">");
+            sb.AppendLine("<thead>");
+            sb.AppendLine("<tr>");
+            sb.AppendLine("<th>Fecha y hora</th>");
+            sb.AppendLine("<th>Administrador</th>");
+            sb.AppendLine("<th>Usuario afectado</th>");
+            sb.AppendLine("<th>Tipo de acción</th>");
+            sb.AppendLine("<th>Mensaje registrado</th>");
+            sb.AppendLine("</tr>");
+            sb.AppendLine("</thead>");
+            sb.AppendLine("<tbody>");
+
+            foreach (var r in registros)
+            {
+                sb.AppendLine("<tr>");
+                sb.AppendLine($"<td>{System.Net.WebUtility.HtmlEncode(r.FechaHora.ToString("yyyy-MM-dd HH:mm:ss"))}</td>");
+                sb.AppendLine($"<td>{System.Net.WebUtility.HtmlEncode(r.Administrador)}</td>");
+                sb.AppendLine($"<td>{System.Net.WebUtility.HtmlEncode(r.UsuarioAfectado)}</td>");
+                sb.AppendLine($"<td>{System.Net.WebUtility.HtmlEncode(r.TipoAccion)}</td>");
+                sb.AppendLine($"<td>{System.Net.WebUtility.HtmlEncode(r.MensajeRegistrado)}</td>");
+                sb.AppendLine("</tr>");
+            }
+
+            sb.AppendLine("</tbody>");
+            sb.AppendLine("</table>");
+            sb.AppendLine("</body>");
+            sb.AppendLine("</html>");
+
+            return sb.ToString();
+        }
+
         public async Task<ExportarAuditoriaResponseDto> ExportarExcelAsync(
             string tokenSesion,
             ExportarAuditoriaRequestDto filtro)
@@ -45,12 +85,12 @@ namespace X_Chang.CORE.Core.Services
 
             var registros = await _repository.BuscarAuditoriaParaExportarAsync(filtro);
 
-            var contenido = ConstruirCsv(registros);
+            var contenido = ConstruirHtmlExcel(registros);
 
             return new ExportarAuditoriaResponseDto
             {
-                NombreArchivo = $"auditoria_{DateTime.Now:yyyyMMdd_HHmmss}.csv",
-                TipoContenido = "text/csv",
+                NombreArchivo = $"auditoria_{DateTime.Now:yyyyMMdd_HHmmss}.xls",
+                TipoContenido = "application/vnd.ms-excel",
                 Archivo = Encoding.UTF8.GetBytes(contenido)
             };
         }
@@ -108,25 +148,6 @@ namespace X_Chang.CORE.Core.Services
         {
             var permitidos = new[] { "10", "20", "40", "100", "200", "400", "Todos" };
             return permitidos.Contains(valor);
-        }
-
-        private static string ConstruirCsv(List<AuditoriaAdminRegistroDto> registros)
-        {
-            var sb = new StringBuilder();
-
-            sb.AppendLine("FechaHora,Administrador,UsuarioAfectado,TipoAccion,MensajeRegistrado");
-
-            foreach (var r in registros)
-            {
-                sb.AppendLine(
-                    $"{EscaparCsv(r.FechaHora.ToString("yyyy-MM-dd HH:mm:ss"))}," +
-                    $"{EscaparCsv(r.Administrador)}," +
-                    $"{EscaparCsv(r.UsuarioAfectado)}," +
-                    $"{EscaparCsv(r.TipoAccion)}," +
-                    $"{EscaparCsv(r.MensajeRegistrado)}");
-            }
-
-            return sb.ToString();
         }
 
         private static string EscaparCsv(string valor)

@@ -264,6 +264,9 @@ namespace X_Chang.CORE.Core.Services
             if (sesion == null)
                 throw new UnauthorizedAccessException("Sesión inválida o expirada.");
 
+            if (sesion.Usuario.Estado == "Restringido")
+                throw new InvalidOperationException("Su cuenta se encuentra restringida y no puede realizar ventas inmediatas.");
+
             return sesion.UsuarioId;
         }
 
@@ -409,6 +412,19 @@ namespace X_Chang.CORE.Core.Services
                 TotalVentaNormal = totalVentaNormal,
                 TotalRutaEncontrada = cantidadActualAVender,
                 GananciaEstimada = cantidadActualAVender - totalVentaNormal,
+                PrecioMinimo = saltos
+                    .Where(s => s.PrecioMinimo.HasValue)
+                    .Select(s => s.PrecioMinimo!.Value)
+                    .DefaultIfEmpty()
+                    .Min(),
+                PrecioMaximo = saltos
+                    .Where(s => s.PrecioMaximo.HasValue)
+                    .Select(s => s.PrecioMaximo!.Value)
+                    .DefaultIfEmpty()
+                    .Max(),
+                PrecioPromedio = cantidadInicialAVender > 0
+                    ? cantidadActualAVender / cantidadInicialAVender
+                    : null,
                 RutaEncontrada = cantidadActualAVender > totalVentaNormal,
                 Saltos = saltos
             };

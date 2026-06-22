@@ -1,0 +1,15 @@
+namespace X_Chang.CORE.Core.DTOs.Mercado
+{
+    public class OperacionesActivasResponseDto
+    {
+        public List<OperacionActivaDto> OrdenesCompra { get; set; } = new();
+        public List<OperacionActivaDto> OfertasVenta { get; set; } = new();
+        public int PaginaActual { get; set; }
+        public int TotalPaginas { get; set; }
+        public int TotalRegistros { get; set; }
+        public string RegistrosPorPagina { get; set; } = "10";
+        public bool TienePaginaAnterior { get; set; }
+        public bool TienePaginaSiguiente { get; set; }
+        public string Mensaje { get; set; } = string.Empty;
+    }
+}
