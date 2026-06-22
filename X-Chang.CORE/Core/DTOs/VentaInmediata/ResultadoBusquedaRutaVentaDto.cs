@@ -24,6 +24,12 @@ namespace X_Chang.CORE.Core.DTOs.VentaInmediata
 
         public decimal GananciaEstimada { get; set; }
 
+        public decimal? PrecioMinimo { get; set; }
+
+        public decimal? PrecioMaximo { get; set; }
+
+        public decimal? PrecioPromedio { get; set; }
+
         public bool RutaEncontrada { get; set; }
 
         public string Mensaje { get; set; } = string.Empty;

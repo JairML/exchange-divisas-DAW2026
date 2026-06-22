@@ -1,98 +1,132 @@
+using System;
+using System.Linq;
+using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using X_Chang.CORE.Core.Entities;
 using X_Chang.CORE.Core.Interfaces;
+using X_Chang.CORE.Infrastructure.Shared;
 using X_Chang.CORE.Infrastructure.Data;
 
-namespace X_Chang.CORE.Infrastructure.Repositories;
-
-public class CancelacionRepository : ICancelacionRepository
+namespace X_Chang.CORE.Infrastructure.Repositories
 {
-    private readonly ExchangeDivisasDbContext _context;
-
-    public CancelacionRepository(ExchangeDivisasDbContext context)
+    // US-022: acceso a datos de la cancelación de orden u oferta.
+    public class CancelacionRepository : ICancelacionRepository
     {
-        _context = context;
-    }
+        private readonly ExchangeDivisasDbContext _context;
 
-    public async Task<Usuarios?> GetUsuario(int usuarioId)
-    {
-        return await _context.Usuarios
-            .FirstOrDefaultAsync(u => u.UsuarioId == usuarioId);
-    }
+        // Estados en los que una orden u oferta todavía puede cancelarse.
+        private static readonly string[] EstadosCancelables =
+            { "Activa", "Parcialmente ejecutada" };
 
-    public async Task<OrdenesCompra?> GetOrden(int ordenCompraId)
-    {
-        return await _context.OrdenesCompra
-            .Include(o => o.ParMoneda)
-                .ThenInclude(p => p.MonedaOrigen)
-            .Include(o => o.ParMoneda)
-                .ThenInclude(p => p.MonedaDestino)
-            .FirstOrDefaultAsync(o => o.OrdenCompraId == ordenCompraId);
-    }
-
-    public async Task<OfertasVenta?> GetOferta(int ofertaVentaId)
-    {
-        return await _context.OfertasVenta
-            .Include(o => o.ParMoneda)
-                .ThenInclude(p => p.MonedaOrigen)
-            .Include(o => o.ParMoneda)
-                .ThenInclude(p => p.MonedaDestino)
-            .FirstOrDefaultAsync(o => o.OfertaVentaId == ofertaVentaId);
-    }
-
-    public async Task<(int cancelacionId, decimal nuevoSaldo, DateTime fecha)?> EjecutarCancelacion(
-        string tipoOperacion,
-        int referenciaId,
-        int usuarioId,
-        int parMonedaId,
-        int monedaReembolsoId,
-        decimal montoReembolsado,
-        decimal cantidadEjecutada,
-        decimal cantidadCancelada,
-        string correoDestino)
-    {
-        await using var tx = await _context.Database.BeginTransactionAsync();
-
-        try
+        public CancelacionRepository(ExchangeDivisasDbContext context)
         {
-            string estadoActual;
+            _context = context;
+        }
+
+        public async Task<Usuarios?> GetUsuario(int usuarioId)
+        {
+            return await _context.Usuarios
+                .FirstOrDefaultAsync(u => u.UsuarioId == usuarioId);
+        }
+
+        public async Task<OrdenesCompra?> GetOrden(int ordenCompraId)
+        {
+            return await _context.OrdenesCompra
+                .Include(o => o.ParMoneda).ThenInclude(p => p.MonedaOrigen)
+                .Include(o => o.ParMoneda).ThenInclude(p => p.MonedaDestino)
+                .FirstOrDefaultAsync(o => o.OrdenCompraId == ordenCompraId);
+        }
+
+        public async Task<OfertasVenta?> GetOferta(int ofertaVentaId)
+        {
+            return await _context.OfertasVenta
+                .Include(o => o.ParMoneda).ThenInclude(p => p.MonedaOrigen)
+                .Include(o => o.ParMoneda).ThenInclude(p => p.MonedaDestino)
+                .FirstOrDefaultAsync(o => o.OfertaVentaId == ofertaVentaId);
+        }
+
+        public async Task<(int cancelacionId, decimal nuevoSaldo, DateTime fecha)?> EjecutarCancelacion(
+    string tipoOperacion,
+    int referenciaId,
+    int usuarioId,
+    int parMonedaId,
+    int monedaReembolsoId,
+    decimal montoReembolsado,
+    decimal cantidadEjecutada,
+    decimal cantidadCancelada,
+    string correoDestino)
+        {
+            var ahora = DateTime.Now;
+            var esOrden = tipoOperacion == "Orden de compra";
+
+            using var tx = await _context.Database.BeginTransactionAsync();
+
             int? ordenCompraId = null;
             int? ofertaVentaId = null;
 
-            if (tipoOperacion == "Orden de compra")
+            if (esOrden)
             {
                 var orden = await _context.OrdenesCompra
-                    .FirstOrDefaultAsync(o => o.OrdenCompraId == referenciaId);
+                    .FirstOrDefaultAsync(o =>
+                        o.OrdenCompraId == referenciaId &&
+                        o.UsuarioId == usuarioId);
 
-                if (orden == null) return null;
-
-                estadoActual = orden.Estado;
-                if (estadoActual != "Activa" && estadoActual != "Parcialmente ejecutada")
+                if (orden == null || !EstadosCancelables.Contains(orden.Estado))
+                {
+                    await tx.RollbackAsync();
                     return null;
+                }
 
                 orden.Estado = "Cancelada";
-                orden.FechaCancelacion = DateTime.UtcNow;
-                orden.FechaActualizacion = DateTime.UtcNow;
-                ordenCompraId = referenciaId;
+                orden.FechaCancelacion = ahora;
+                orden.FechaActualizacion = ahora;
+                ordenCompraId = orden.OrdenCompraId;
+
+                var ofertaEspejo = await _context.OfertasVenta
+                    .FirstOrDefaultAsync(o => o.OrdenCompraEspejoId == orden.OrdenCompraId);
+
+                if (ofertaEspejo != null &&
+                    EstadosCancelables.Contains(ofertaEspejo.Estado))
+                {
+                    ofertaEspejo.Estado = "Cancelada";
+                    ofertaEspejo.FechaCancelacion = ahora;
+                    ofertaEspejo.FechaActualizacion = ahora;
+                }
             }
             else
             {
                 var oferta = await _context.OfertasVenta
-                    .FirstOrDefaultAsync(o => o.OfertaVentaId == referenciaId);
+                    .FirstOrDefaultAsync(o =>
+                        o.OfertaVentaId == referenciaId &&
+                        o.UsuarioId == usuarioId);
 
-                if (oferta == null) return null;
-
-                estadoActual = oferta.Estado;
-                if (estadoActual != "Activa" && estadoActual != "Parcialmente ejecutada")
+                if (oferta == null || !EstadosCancelables.Contains(oferta.Estado))
+                {
+                    await tx.RollbackAsync();
                     return null;
+                }
 
                 oferta.Estado = "Cancelada";
-                oferta.FechaCancelacion = DateTime.UtcNow;
-                oferta.FechaActualizacion = DateTime.UtcNow;
-                ofertaVentaId = referenciaId;
+                oferta.FechaCancelacion = ahora;
+                oferta.FechaActualizacion = ahora;
+                ofertaVentaId = oferta.OfertaVentaId;
+
+                if (oferta.OrdenCompraEspejoId != null)
+                {
+                    var ordenEspejo = await _context.OrdenesCompra
+                        .FirstOrDefaultAsync(o =>
+                            o.OrdenCompraId == oferta.OrdenCompraEspejoId.Value);
+
+                    if (ordenEspejo != null &&
+                        EstadosCancelables.Contains(ordenEspejo.Estado))
+                    {
+                        ordenEspejo.Estado = "Cancelada";
+                        ordenEspejo.FechaCancelacion = ahora;
+                        ordenEspejo.FechaActualizacion = ahora;
+                    }
+                }
             }
 
-            // Registrar la cancelacion
             var cancelacion = new CancelacionesOrdenOferta
             {
                 UsuarioId = usuarioId,
@@ -103,99 +137,72 @@ public class CancelacionRepository : ICancelacionRepository
                 CantidadEjecutada = cantidadEjecutada,
                 CantidadCancelada = cantidadCancelada,
                 MontoReembolsado = montoReembolsado,
-                FechaCancelacion = DateTime.UtcNow
+                FechaCancelacion = ahora
             };
+
             _context.CancelacionesOrdenOferta.Add(cancelacion);
             await _context.SaveChangesAsync();
 
-            // Reembolsar el saldo en la billetera del usuario
-            var billetera = await _context.Billeteras
-                .FirstOrDefaultAsync(b => b.UsuarioId == usuarioId);
+            decimal nuevoSaldo;
 
-            if (billetera == null)
-                throw new InvalidOperationException("Billetera no encontrada.");
-
-            var saldo = await _context.SaldosBilletera
-                .FirstOrDefaultAsync(s => s.BilleteraId == billetera.BilleteraId
-                                        && s.MonedaId == monedaReembolsoId);
-
-            decimal saldoAnterior;
-            decimal saldoPosterior;
-
-            if (saldo == null)
+            if (montoReembolsado > 0m)
             {
-                saldoAnterior = 0m;
-                saldoPosterior = montoReembolsado;
-                var nuevoSaldo = new SaldosBilletera
-                {
-                    BilleteraId = billetera.BilleteraId,
-                    MonedaId = monedaReembolsoId,
-                    SaldoDisponible = montoReembolsado,
-                    FechaActualizacion = DateTime.UtcNow
-                };
-                _context.SaldosBilletera.Add(nuevoSaldo);
+                var (_, posterior) = await MovimientoBilleteraHelper.Aplicar(
+                    _context,
+                    usuarioId,
+                    monedaReembolsoId,
+                    montoReembolsado,
+                    "Reembolso",
+                    "Cancelacion",
+                    cancelacion.CancelacionId);
+
+                nuevoSaldo = posterior;
             }
             else
             {
-                saldoAnterior = saldo.SaldoDisponible;
-                saldo.SaldoDisponible += montoReembolsado;
-                saldo.FechaActualizacion = DateTime.UtcNow;
-                saldoPosterior = saldo.SaldoDisponible;
+                nuevoSaldo = await _context.SaldosBilletera
+                    .Where(s =>
+                        s.Billetera.UsuarioId == usuarioId &&
+                        s.MonedaId == monedaReembolsoId)
+                    .Select(s => s.SaldoDisponible)
+                    .FirstOrDefaultAsync();
             }
 
-            // Registrar movimiento de billetera
-            var movimiento = new MovimientosBilletera
-            {
-                UsuarioId = usuarioId,
-                MonedaId = monedaReembolsoId,
-                TipoMovimiento = "Reembolso cancelacion",
-                Monto = montoReembolsado,
-                SaldoAnterior = saldoAnterior,
-                SaldoPosterior = saldoPosterior,
-                FechaMovimiento = DateTime.UtcNow,
-                ReferenciaTipo = tipoOperacion,
-                ReferenciaId = cancelacion.CancelacionId
-            };
-            _context.MovimientosBilletera.Add(movimiento);
-
-            // Registrar historial de transacciones
-            var historial = new HistorialTransacciones
+            _context.HistorialTransacciones.Add(new HistorialTransacciones
             {
                 UsuarioId = usuarioId,
                 TipoOperacion = "Cancelacion",
                 ReferenciaId = cancelacion.CancelacionId,
                 ParMonedaId = parMonedaId,
-                MonedaId = monedaReembolsoId,
-                FechaHora = DateTime.UtcNow,
-                Estado = "Completada",
+                MonedaId = null,
+                FechaHora = ahora,
+                Estado = "Cancelada",
                 MetodoEjecucion = null
-            };
-            _context.HistorialTransacciones.Add(historial);
+            });
 
-            // Registrar notificacion
-            var notificacion = new NotificacionesCorreo
+            var tipoNotificacionId = await _context.TiposNotificacion
+                .Where(t => t.Nombre == "Cancelación")
+                .Select(t => (int?)t.TipoNotificacionId)
+                .FirstOrDefaultAsync();
+
+            _context.NotificacionesCorreo.Add(new NotificacionesCorreo
             {
                 UsuarioId = usuarioId,
                 CorreoDestino = correoDestino,
-                TipoEvento = "Cancelacion",
-                Asunto = $"Cancelacion de {tipoOperacion}",
-                Cuerpo = $"Su {tipoOperacion} ha sido cancelada. Monto reembolsado: {montoReembolsado}.",
+                TipoEvento = "Cancelación",
+                TipoNotificacionId = tipoNotificacionId,
+                Asunto = "Cancelación realizada",
+                Cuerpo = $"Tu {tipoOperacion.ToLower()} fue cancelada. Monto reembolsado: {montoReembolsado}.",
                 EstadoEnvio = "Pendiente",
-                FechaCreacion = DateTime.UtcNow,
-                ReferenciaTipo = tipoOperacion,
+                FechaCreacion = ahora,
+                ReferenciaTipo = "Cancelacion",
                 ReferenciaId = cancelacion.CancelacionId
-            };
-            _context.NotificacionesCorreo.Add(notificacion);
+            });
 
             await _context.SaveChangesAsync();
             await tx.CommitAsync();
 
-            return (cancelacion.CancelacionId, saldoPosterior, cancelacion.FechaCancelacion);
-        }
-        catch
-        {
-            await tx.RollbackAsync();
-            throw;
+            return (cancelacion.CancelacionId, nuevoSaldo, ahora);
         }
     }
 }

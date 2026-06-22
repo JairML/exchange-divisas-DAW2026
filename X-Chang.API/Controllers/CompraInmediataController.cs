@@ -27,9 +27,16 @@ namespace X_Chang.API.Controllers
         private string ObtenerTokenSesion()
         {
             var authHeader = Request.Headers.Authorization.FirstOrDefault();
-            if (authHeader == null || !authHeader.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
-                throw new UnauthorizedAccessException("No se envió el token de sesión.");
-            return authHeader["Bearer ".Length..].Trim();
+            if (!string.IsNullOrWhiteSpace(authHeader) &&
+                authHeader.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
+            {
+                return authHeader["Bearer ".Length..].Trim();
+            }
+
+            if (Request.Headers.TryGetValue("tokenSesion", out var tokenSesion))
+                return tokenSesion.ToString();
+
+            throw new UnauthorizedAccessException("No se envió el token de sesión.");
         }
 
         [HttpPost("resumen")]

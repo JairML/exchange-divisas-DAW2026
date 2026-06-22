@@ -69,6 +69,8 @@ builder.Services.AddScoped<IVentaInmediataRepository, VentaInmediataRepository>(
 builder.Services.AddScoped<IVentaInmediataService, VentaInmediataService>();
 builder.Services.AddScoped<IRetiroRepository, RetiroRepository>();
 builder.Services.AddScoped<IRetiroService, RetiroService>();
+builder.Services.AddScoped<IMercadoRepository, MercadoRepository>();
+builder.Services.AddScoped<IMercadoService, MercadoService>();
 
 var app = builder.Build();
 

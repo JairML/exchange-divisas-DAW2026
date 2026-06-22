@@ -1,4 +1,5 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
+using X_Chang.CORE.Core.DTOs.Mercado;
 using X_Chang.CORE.Core.Entities;
 using X_Chang.CORE.Core.Interfaces;
 using X_Chang.CORE.DTOs;
@@ -9,128 +10,61 @@ namespace X_Chang.CORE.Services;
 public class OfertaService : IOfertaService
 {
     private readonly ExchangeDivisasDbContext _context;
-    private readonly IMatchingService _matching;
+    private readonly IMercadoRepository _mercadoRepository;
+    private static readonly string[] EstadosActivos = { "Activa", "Parcialmente ejecutada" };
 
-    public OfertaService(ExchangeDivisasDbContext context, IMatchingService matching)
+    public OfertaService(ExchangeDivisasDbContext context, IMercadoRepository mercadoRepository)
     {
         _context = context;
-        _matching = matching;
+        _mercadoRepository = mercadoRepository;
     }
 
     public async Task<OfertasActivasResponseDto> ListarOfertasActivasAsync(int usuarioId, FiltroOfertasRequest filtro)
     {
+        var pagina = filtro.Pagina < 1 ? 1 : filtro.Pagina;
+        var tamanoPagina = filtro.TamanoPagina <= 0 ? 10 : filtro.TamanoPagina;
+
         var query = _context.OfertasVenta
             .Include(o => o.ParMoneda).ThenInclude(p => p.MonedaOrigen)
             .Include(o => o.ParMoneda).ThenInclude(p => p.MonedaDestino)
-            .Where(o => o.UsuarioId == usuarioId);
+            .Where(o => o.UsuarioId == usuarioId && EstadosActivos.Contains(o.Estado));
 
         if (filtro.Desde.HasValue)
-            query = query.Where(o => o.FechaCreacion >= filtro.Desde.Value);
+            query = query.Where(o => o.FechaCreacion >= filtro.Desde.Value.Date);
+
         if (filtro.Hasta.HasValue)
-            query = query.Where(o => o.FechaCreacion <= filtro.Hasta.Value);
+            query = query.Where(o => o.FechaCreacion < filtro.Hasta.Value.Date.AddDays(1));
+
         if (!string.IsNullOrWhiteSpace(filtro.Estado))
             query = query.Where(o => o.Estado == filtro.Estado);
 
         var total = await query.CountAsync();
         var rows = await query
             .OrderByDescending(o => o.FechaCreacion)
-            .Skip((filtro.Pagina - 1) * filtro.TamanoPagina)
-            .Take(filtro.TamanoPagina)
+            .Skip((pagina - 1) * tamanoPagina)
+            .Take(tamanoPagina)
             .ToListAsync();
 
         var ofertas = rows.Select(o => MapOfertaDto(o, o.ParMoneda)).ToList();
-        return new OfertasActivasResponseDto(ofertas, total, filtro.Pagina, filtro.TamanoPagina);
+        return new OfertasActivasResponseDto(ofertas, total, pagina, tamanoPagina);
     }
 
     public async Task<OfertaDto> CrearOfertaVentaAsync(int usuarioId, CrearOfertaRequest request)
     {
-        if (request.Cantidad <= 0 || request.PrecioUnitario <= 0)
-            throw new ArgumentException("Cantidad y precio deben ser mayores a cero.");
-
-        var par = await _context.ParesMoneda
-            .Include(p => p.MonedaOrigen)
-            .Include(p => p.MonedaDestino)
-            .FirstOrDefaultAsync(p => p.ParMonedaId == request.ParMonedaId)
-            ?? throw new InvalidOperationException("Par de moneda no encontrado.");
-
-        if (!par.Activo)
-            throw new InvalidOperationException("El par de moneda está inactivo.");
-
-        var billetera = await _context.Billeteras
-            .FirstOrDefaultAsync(b => b.UsuarioId == usuarioId)
-            ?? throw new InvalidOperationException("Billetera no encontrada.");
-
-        var saldoDestino = await _context.SaldosBilletera
-            .FirstOrDefaultAsync(s =>
-                s.BilleteraId == billetera.BilleteraId &&
-                s.MonedaId == par.MonedaDestinoId);
-
-        if (saldoDestino == null || saldoDestino.SaldoDisponible < request.Cantidad)
-            throw new InvalidOperationException("Saldo insuficiente en la moneda a vender.");
-
-        await using var tx = await _context.Database.BeginTransactionAsync();
-        try
+        var resultado = await _mercadoRepository.CrearOfertaVentaAsync(usuarioId, new CrearOfertaVentaRequestDto
         {
-            var saldoAnterior = saldoDestino.SaldoDisponible;
-            saldoDestino.SaldoDisponible -= request.Cantidad;
-            saldoDestino.FechaActualizacion = DateTime.UtcNow;
+            ParMonedaId = request.ParMonedaId,
+            CantidadAVender = request.Cantidad,
+            PrecioUnitario = request.PrecioUnitario
+        });
 
-            var oferta = new OfertasVenta
-            {
-                UsuarioId = usuarioId,
-                ParMonedaId = request.ParMonedaId,
-                CantidadOriginal = request.Cantidad,
-                CantidadVendida = 0,
-                CantidadPendiente = request.Cantidad,
-                PrecioUnitario = request.PrecioUnitario,
-                TotalEsperado = request.Cantidad * request.PrecioUnitario,
-                TotalRecibido = 0,
-                Estado = "Activa",
-                FechaCreacion = DateTime.UtcNow,
-                FechaActualizacion = DateTime.UtcNow
-            };
-            _context.OfertasVenta.Add(oferta);
-            await _context.SaveChangesAsync();
+        var oferta = await _context.OfertasVenta
+            .Include(o => o.ParMoneda).ThenInclude(p => p.MonedaOrigen)
+            .Include(o => o.ParMoneda).ThenInclude(p => p.MonedaDestino)
+            .FirstAsync(o => o.OfertaVentaId == resultado.OfertaVentaId);
 
-            _context.MovimientosBilletera.Add(new MovimientosBilletera
-            {
-                UsuarioId = usuarioId,
-                MonedaId = par.MonedaDestinoId,
-                TipoMovimiento = "ReservaOferta",
-                Monto = -request.Cantidad,
-                SaldoAnterior = saldoAnterior,
-                SaldoPosterior = saldoDestino.SaldoDisponible,
-                FechaMovimiento = DateTime.UtcNow,
-                ReferenciaTipo = "OfertaVenta",
-                ReferenciaId = oferta.OfertaVentaId
-            });
-
-            _context.HistorialTransacciones.Add(new HistorialTransacciones
-            {
-                UsuarioId = usuarioId,
-                TipoOperacion = "OfertaVenta",
-                ReferenciaId = oferta.OfertaVentaId,
-                ParMonedaId = request.ParMonedaId,
-                FechaHora = DateTime.UtcNow,
-                Estado = "Activa"
-            });
-
-            await _context.SaveChangesAsync();
-            await tx.CommitAsync();
-
-            await _matching.EjecutarMatchingOfertaAsync(oferta.OfertaVentaId);
-
-            await _context.Entry(oferta).ReloadAsync();
-
-            return MapOfertaDto(oferta, par);
-        }
-        catch
-        {
-            await tx.RollbackAsync();
-            throw;
-        }
+        return MapOfertaDto(oferta, oferta.ParMoneda);
     }
-
 
     private static OfertaDto MapOfertaDto(OfertasVenta o, ParesMoneda par) =>
         new(o.OfertaVentaId, o.ParMonedaId,

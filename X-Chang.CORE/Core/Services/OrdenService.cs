@@ -1,32 +1,57 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using X_Chang.CORE.Core.Entities;
 using X_Chang.CORE.Core.Interfaces;
 using X_Chang.CORE.DTOs;
 using X_Chang.CORE.Infrastructure.Data;
+
+using MercadoCrearOrdenCompraRequestDto = X_Chang.CORE.Core.DTOs.Mercado.CrearOrdenCompraRequestDto;
 
 namespace X_Chang.CORE.Services;
 
 public class OrdenService : IOrdenService
 {
     private readonly ExchangeDivisasDbContext _context;
-    private readonly IMatchingService _matching;
-    private static OrdenDto MapOrdenDto(OrdenesCompra o, ParesMoneda par) =>
-    new(o.OrdenCompraId, o.ParMonedaId,
-        par.MonedaOrigen.CodigoIso, par.MonedaDestino.CodigoIso,
-        o.CantidadOriginal, o.CantidadObtenida, o.CantidadPendiente,
-        o.PrecioUnitario, o.TotalComprometido, o.TotalEjecutado,
-        o.Estado, o.FechaCreacion, o.FechaActualizacion);
+    private readonly IMercadoRepository _mercadoRepository;
 
-    public OrdenService(ExchangeDivisasDbContext context, IMatchingService matching)
+    private static readonly string[] EstadosActivos =
+    {
+        "Activa",
+        "Parcialmente ejecutada"
+    };
+
+    public OrdenService(
+        ExchangeDivisasDbContext context,
+        IMercadoRepository mercadoRepository)
     {
         _context = context;
-        _matching = matching;
+        _mercadoRepository = mercadoRepository;
     }
 
-    public async Task<LibroOrdenesDto> ObtenerLibroOrdenesAsync(int parMonedaId)
+    private static OrdenDto MapOrdenDto(OrdenesCompra o, ParesMoneda par)
+    {
+        return new OrdenDto(
+            o.OrdenCompraId,
+            o.ParMonedaId,
+            par.MonedaOrigen.CodigoIso,
+            par.MonedaDestino.CodigoIso,
+            o.CantidadOriginal,
+            o.CantidadObtenida,
+            o.CantidadPendiente,
+            o.PrecioUnitario,
+            o.TotalComprometido,
+            o.TotalEjecutado,
+            o.Estado,
+            o.FechaCreacion,
+            o.FechaActualizacion);
+    }
+
+    public async Task<X_Chang.CORE.DTOs.LibroOrdenesDto> ObtenerLibroOrdenesAsync(int parMonedaId)
     {
         var compras = await _context.OrdenesCompra
-            .Where(o => o.ParMonedaId == parMonedaId && o.Estado == "Activa")
+            .Where(o =>
+                o.ParMonedaId == parMonedaId &&
+                EstadosActivos.Contains(o.Estado) &&
+                o.CantidadPendiente > 0)
             .GroupBy(o => o.PrecioUnitario)
             .Select(g => new NivelOrdenDto(
                 g.Key,
@@ -37,7 +62,10 @@ public class OrdenService : IOrdenService
             .ToListAsync();
 
         var ventas = await _context.OfertasVenta
-            .Where(o => o.ParMonedaId == parMonedaId && o.Estado == "Activa")
+            .Where(o =>
+                o.ParMonedaId == parMonedaId &&
+                EstadosActivos.Contains(o.Estado) &&
+                o.CantidadPendiente > 0)
             .GroupBy(o => o.PrecioUnitario)
             .Select(g => new NivelOrdenDto(
                 g.Key,
@@ -47,25 +75,44 @@ public class OrdenService : IOrdenService
             .Take(20)
             .ToListAsync();
 
-        return new LibroOrdenesDto(compras, ventas);
+        return new X_Chang.CORE.DTOs.LibroOrdenesDto(compras, ventas);
     }
 
-    public async Task<LibroOrdenesDetalleDto> ObtenerLibroOrdenesDetalleAsync(int parMonedaId, int limite = 10)
+    public async Task<LibroOrdenesDetalleDto> ObtenerLibroOrdenesDetalleAsync(
+        int parMonedaId,
+        int limite = 10)
     {
+        if (limite <= 0)
+            limite = 10;
+
         var compras = await _context.OrdenesCompra
-            .Where(o => o.ParMonedaId == parMonedaId && o.Estado == "Activa")
+            .Where(o =>
+                o.ParMonedaId == parMonedaId &&
+                EstadosActivos.Contains(o.Estado) &&
+                o.CantidadPendiente > 0)
             .OrderByDescending(o => o.PrecioUnitario)
+            .ThenBy(o => o.FechaCreacion)
             .Take(limite)
             .Select(o => new LibroOrdenEntradaDto(
-                o.OrdenCompraId, o.CantidadPendiente, o.PrecioUnitario, o.FechaCreacion))
+                o.OrdenCompraId,
+                o.CantidadPendiente,
+                o.PrecioUnitario,
+                o.FechaCreacion))
             .ToListAsync();
 
         var ventas = await _context.OfertasVenta
-            .Where(o => o.ParMonedaId == parMonedaId && o.Estado == "Activa")
+            .Where(o =>
+                o.ParMonedaId == parMonedaId &&
+                EstadosActivos.Contains(o.Estado) &&
+                o.CantidadPendiente > 0)
             .OrderBy(o => o.PrecioUnitario)
+            .ThenBy(o => o.FechaCreacion)
             .Take(limite)
             .Select(o => new LibroOrdenEntradaDto(
-                o.OfertaVentaId, o.CantidadPendiente, o.PrecioUnitario, o.FechaCreacion))
+                o.OfertaVentaId,
+                o.CantidadPendiente,
+                o.PrecioUnitario,
+                o.FechaCreacion))
             .ToListAsync();
 
         return new LibroOrdenesDetalleDto(compras, ventas);
@@ -74,124 +121,80 @@ public class OrdenService : IOrdenService
     public async Task<OrdenDto?> ObtenerOrdenPorIdAsync(int usuarioId, int ordenId)
     {
         var orden = await _context.OrdenesCompra
-            .Include(o => o.ParMoneda).ThenInclude(p => p.MonedaOrigen)
-            .Include(o => o.ParMoneda).ThenInclude(p => p.MonedaDestino)
-            .FirstOrDefaultAsync(o => o.OrdenCompraId == ordenId && o.UsuarioId == usuarioId);
+            .Include(o => o.ParMoneda)
+                .ThenInclude(p => p.MonedaOrigen)
+            .Include(o => o.ParMoneda)
+                .ThenInclude(p => p.MonedaDestino)
+            .FirstOrDefaultAsync(o =>
+                o.OrdenCompraId == ordenId &&
+                o.UsuarioId == usuarioId);
 
-        return orden == null ? null : MapOrdenDto(orden, orden.ParMoneda);
+        return orden == null
+            ? null
+            : MapOrdenDto(orden, orden.ParMoneda);
     }
 
-    public async Task<OrdenesActivasResponseDto> ListarOrdenesActivasAsync(int usuarioId, FiltroOrdenesRequest filtro)
+    public async Task<OrdenesActivasResponseDto> ListarOrdenesActivasAsync(
+        int usuarioId,
+        FiltroOrdenesRequest filtro)
     {
+        var pagina = filtro.Pagina < 1 ? 1 : filtro.Pagina;
+        var tamanoPagina = filtro.TamanoPagina <= 0 ? 10 : filtro.TamanoPagina;
+
         var query = _context.OrdenesCompra
-            .Include(o => o.ParMoneda).ThenInclude(p => p.MonedaOrigen)
-            .Include(o => o.ParMoneda).ThenInclude(p => p.MonedaDestino)
-            .Where(o => o.UsuarioId == usuarioId);
+            .Include(o => o.ParMoneda)
+                .ThenInclude(p => p.MonedaOrigen)
+            .Include(o => o.ParMoneda)
+                .ThenInclude(p => p.MonedaDestino)
+            .Where(o =>
+                o.UsuarioId == usuarioId &&
+                EstadosActivos.Contains(o.Estado));
 
         if (filtro.Desde.HasValue)
-            query = query.Where(o => o.FechaCreacion >= filtro.Desde.Value);
+            query = query.Where(o => o.FechaCreacion >= filtro.Desde.Value.Date);
+
         if (filtro.Hasta.HasValue)
-            query = query.Where(o => o.FechaCreacion <= filtro.Hasta.Value);
+            query = query.Where(o => o.FechaCreacion < filtro.Hasta.Value.Date.AddDays(1));
 
         var total = await query.CountAsync();
+
         var rows = await query
             .OrderByDescending(o => o.FechaCreacion)
-            .Skip((filtro.Pagina - 1) * filtro.TamanoPagina)
-            .Take(filtro.TamanoPagina)
+            .Skip((pagina - 1) * tamanoPagina)
+            .Take(tamanoPagina)
             .ToListAsync();
 
-        var ordenes = rows.Select(o => MapOrdenDto(o, o.ParMoneda)).ToList();
-        return new OrdenesActivasResponseDto(ordenes, total, filtro.Pagina, filtro.TamanoPagina);
+        var ordenes = rows
+            .Select(o => MapOrdenDto(o, o.ParMoneda))
+            .ToList();
+
+        return new OrdenesActivasResponseDto(
+            ordenes,
+            total,
+            pagina,
+            tamanoPagina);
     }
 
-    public async Task<OrdenDto> CrearOrdenCompraAsync(int usuarioId, CrearOrdenRequest request)
+    public async Task<OrdenDto> CrearOrdenCompraAsync(
+        int usuarioId,
+        CrearOrdenRequest request)
     {
-        if (request.Cantidad <= 0 || request.PrecioUnitario <= 0)
-            throw new ArgumentException("Cantidad y precio deben ser mayores a cero.");
-
-        var par = await _context.ParesMoneda
-            .Include(p => p.MonedaOrigen)
-            .Include(p => p.MonedaDestino)
-            .FirstOrDefaultAsync(p => p.ParMonedaId == request.ParMonedaId)
-            ?? throw new InvalidOperationException("Par de moneda no encontrado.");
-
-        if (!par.Activo)
-            throw new InvalidOperationException("El par de moneda está inactivo.");
-
-        var totalComprometido = request.Cantidad * request.PrecioUnitario;
-
-        var billetera = await _context.Billeteras
-            .FirstOrDefaultAsync(b => b.UsuarioId == usuarioId)
-            ?? throw new InvalidOperationException("Billetera no encontrada.");
-
-        var saldoOrigen = await _context.SaldosBilletera
-            .FirstOrDefaultAsync(s =>
-                s.BilleteraId == billetera.BilleteraId &&
-                s.MonedaId == par.MonedaOrigenId);
-
-        if (saldoOrigen == null || saldoOrigen.SaldoDisponible < totalComprometido)
-            throw new InvalidOperationException("Saldo insuficiente en la moneda de origen.");
-
-        await using var tx = await _context.Database.BeginTransactionAsync();
-        try
-        {
-            var saldoAnterior = saldoOrigen.SaldoDisponible;
-            saldoOrigen.SaldoDisponible -= totalComprometido;
-            saldoOrigen.FechaActualizacion = DateTime.UtcNow;
-
-            var orden = new OrdenesCompra
+        var resultado = await _mercadoRepository.CrearOrdenCompraAsync(
+            usuarioId,
+            new MercadoCrearOrdenCompraRequestDto
             {
-                UsuarioId = usuarioId,
                 ParMonedaId = request.ParMonedaId,
-                CantidadOriginal = request.Cantidad,
-                CantidadObtenida = 0,
-                CantidadPendiente = request.Cantidad,
-                PrecioUnitario = request.PrecioUnitario,
-                TotalComprometido = totalComprometido,
-                TotalEjecutado = 0,
-                Estado = "Activa",
-                FechaCreacion = DateTime.UtcNow,
-                FechaActualizacion = DateTime.UtcNow
-            };
-            _context.OrdenesCompra.Add(orden);
-            await _context.SaveChangesAsync();
-
-            _context.MovimientosBilletera.Add(new MovimientosBilletera
-            {
-                UsuarioId = usuarioId,
-                MonedaId = par.MonedaOrigenId,
-                TipoMovimiento = "ReservaOrden",
-                Monto = -totalComprometido,
-                SaldoAnterior = saldoAnterior,
-                SaldoPosterior = saldoOrigen.SaldoDisponible,
-                FechaMovimiento = DateTime.UtcNow,
-                ReferenciaTipo = "OrdenCompra",
-                ReferenciaId = orden.OrdenCompraId
+                CantidadAObtener = request.Cantidad,
+                PrecioUnitario = request.PrecioUnitario
             });
 
-            _context.HistorialTransacciones.Add(new HistorialTransacciones
-            {
-                UsuarioId = usuarioId,
-                TipoOperacion = "OrdenCompra",
-                ReferenciaId = orden.OrdenCompraId,
-                ParMonedaId = request.ParMonedaId,
-                FechaHora = DateTime.UtcNow,
-                Estado = "Activa"
-            });
+        var orden = await _context.OrdenesCompra
+            .Include(o => o.ParMoneda)
+                .ThenInclude(p => p.MonedaOrigen)
+            .Include(o => o.ParMoneda)
+                .ThenInclude(p => p.MonedaDestino)
+            .FirstAsync(o => o.OrdenCompraId == resultado.OrdenCompraId);
 
-            await _context.SaveChangesAsync();
-            await tx.CommitAsync();
-
-            await _matching.EjecutarMatchingOrdenAsync(orden.OrdenCompraId);
-
-            await _context.Entry(orden).ReloadAsync();
-
-            return MapOrdenDto(orden, par);
-        }
-        catch
-        {
-            await tx.RollbackAsync();
-            throw;
-        }
+        return MapOrdenDto(orden, orden.ParMoneda);
     }
 }

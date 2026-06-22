@@ -6,6 +6,7 @@ using X_Chang.CORE.Core.Interfaces;
 
 namespace X_Chang.CORE.Core.Services
 {
+    // US-022: Cancelación de orden u oferta.
     public class CancelacionService : ICancelacionService
     {
         private readonly ICancelacionRepository _cancelacionRepository;
@@ -59,11 +60,8 @@ namespace X_Chang.CORE.Core.Services
                 if (oferta.UsuarioId != usuarioId)
                     return ResultadoOperacion<CancelacionDetalleDTO>.Error("La oferta no pertenece al usuario");
 
-                // En una oferta de venta se bloqueó la cantidad a vender en la moneda de ORIGEN;
-                // al cancelar se libera la cantidad pendiente.
-                var monedaReembolso = oferta.ParMoneda.MonedaOrigen.CodigoIso;
+                var monedaReembolso = oferta.ParMoneda.MonedaDestino.CodigoIso;
                 var par = $"{oferta.ParMoneda.MonedaOrigen.CodigoIso}/{oferta.ParMoneda.MonedaDestino.CodigoIso}";
-                var montoPendiente = oferta.TotalEsperado - oferta.TotalRecibido;
 
                 return ResultadoOperacion<CancelacionDetalleDTO>.Ok(new CancelacionDetalleDTO
                 {
@@ -74,7 +72,7 @@ namespace X_Chang.CORE.Core.Services
                     CantidadEjecutada = oferta.CantidadVendida,
                     CantidadPendiente = oferta.CantidadPendiente,
                     PrecioUnitario = oferta.PrecioUnitario,
-                    MontoPendiente = montoPendiente,
+                    MontoPendiente = oferta.CantidadPendiente,
                     MontoReembolso = oferta.CantidadPendiente,
                     MonedaReembolso = monedaReembolso,
                     Estado = oferta.Estado,
@@ -130,8 +128,8 @@ namespace X_Chang.CORE.Core.Services
 
                 par = $"{oferta.ParMoneda.MonedaOrigen.CodigoIso}/{oferta.ParMoneda.MonedaDestino.CodigoIso}";
                 parMonedaId = oferta.ParMonedaId;
-                monedaReembolsoId = oferta.ParMoneda.MonedaOrigenId;
-                monedaReembolso = oferta.ParMoneda.MonedaOrigen.CodigoIso;
+                monedaReembolsoId = oferta.ParMoneda.MonedaDestinoId;
+                monedaReembolso = oferta.ParMoneda.MonedaDestino.CodigoIso;
                 montoReembolsado = oferta.CantidadPendiente;
                 cantidadEjecutada = oferta.CantidadVendida;
                 cantidadCancelada = oferta.CantidadPendiente;

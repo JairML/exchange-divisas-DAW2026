@@ -1,720 +1,638 @@
+﻿using System;
+using System.Collections.Generic;
+using System.Text;
 using Microsoft.EntityFrameworkCore;
 using X_Chang.CORE.Core.DTOs.CompraInmediata;
 using X_Chang.CORE.Core.Entities;
 using X_Chang.CORE.Core.Interfaces;
 using X_Chang.CORE.Infrastructure.Data;
 
-namespace X_Chang.CORE.Infrastructure.Repositories;
-
-public class CompraInmediataRepository : ICompraInmediataRepository
+namespace X_Chang.CORE.Infrastructure.Repositories
 {
-    private readonly ExchangeDivisasDbContext _context;
-
-    public CompraInmediataRepository(ExchangeDivisasDbContext context)
+    public class CompraInmediataRepository : ICompraInmediataRepository
     {
-        _context = context;
-    }
+        private readonly ExchangeDivisasDbContext _context;
 
-    public async Task<ParesMoneda?> ObtenerParMonedaAsync(int parMonedaId)
-    {
-        return await _context.ParesMoneda
-            .Include(p => p.MonedaOrigen)
-            .Include(p => p.MonedaDestino)
-            .FirstOrDefaultAsync(p => p.ParMonedaId == parMonedaId && p.Activo);
-    }
-
-    public async Task<List<ParesMoneda>> ObtenerParesActivosAsync()
-    {
-        return await _context.ParesMoneda
-            .Include(p => p.MonedaOrigen)
-            .Include(p => p.MonedaDestino)
-            .Where(p => p.Activo)
-            .ToListAsync();
-    }
-
-    public async Task<List<OfertasVenta>> ObtenerOfertasVentaActivasAsync(int parMonedaId)
-    {
-        return await _context.OfertasVenta
-            .Where(o => o.ParMonedaId == parMonedaId
-                     && (o.Estado == "Activa" || o.Estado == "Parcialmente ejecutada")
-                     && o.CantidadPendiente > 0)
-            .OrderBy(o => o.PrecioUnitario)
-            .ToListAsync();
-    }
-
-    public async Task<decimal> ObtenerSaldoDisponibleAsync(int usuarioId, int monedaId)
-    {
-        var billetera = await _context.Billeteras
-            .FirstOrDefaultAsync(b => b.UsuarioId == usuarioId);
-
-        if (billetera == null)
-            return 0m;
-
-        var saldo = await _context.SaldosBilletera
-            .FirstOrDefaultAsync(s => s.BilleteraId == billetera.BilleteraId
-                                   && s.MonedaId == monedaId);
-
-        return saldo?.SaldoDisponible ?? 0m;
-    }
-
-    public async Task<BusquedasRuta> CrearBusquedaRutaAsync(
-        int usuarioId,
-        int parMonedaId,
-        decimal cantidadSolicitada,
-        int maxSaltos,
-        int tiempoEstimadoMs)
-    {
-        var busqueda = new BusquedasRuta
+        public CompraInmediataRepository(ExchangeDivisasDbContext context)
         {
-            UsuarioId = usuarioId,
-            ParMonedaId = parMonedaId,
-            TipoOperacion = "Compra",
-            CantidadSolicitada = cantidadSolicitada,
-            MaxSaltos = maxSaltos,
-            TiempoEstimadoMs = tiempoEstimadoMs,
-            Estado = "Pendiente",
-            FechaInicio = DateTime.UtcNow
-        };
-        _context.BusquedasRuta.Add(busqueda);
-        await _context.SaveChangesAsync();
-        return busqueda;
-    }
-
-    public async Task<BusquedasRuta?> ObtenerBusquedaRutaAsync(int busquedaRutaId, int usuarioId)
-    {
-        return await _context.BusquedasRuta
-            .FirstOrDefaultAsync(b => b.BusquedaRutaId == busquedaRutaId
-                                   && b.UsuarioId == usuarioId
-                                   && b.TipoOperacion == "Compra");
-    }
-
-    public async Task<BusquedasRuta?> ObtenerBusquedaRutaConSaltosAsync(int busquedaRutaId, int usuarioId)
-    {
-        return await _context.BusquedasRuta
-            .Include(b => b.RutasConversion)
-                .ThenInclude(r => r.RutaConversionSaltos)
-                    .ThenInclude(s => s.ParMoneda)
-                        .ThenInclude(p => p.MonedaOrigen)
-            .Include(b => b.RutasConversion)
-                .ThenInclude(r => r.RutaConversionSaltos)
-                    .ThenInclude(s => s.ParMoneda)
-                        .ThenInclude(p => p.MonedaDestino)
-            .FirstOrDefaultAsync(b => b.BusquedaRutaId == busquedaRutaId
-                                   && b.UsuarioId == usuarioId
-                                   && b.TipoOperacion == "Compra");
-    }
-
-    public async Task FinalizarBusquedaRutaSinResultadoAsync(int busquedaRutaId)
-    {
-        var busqueda = await _context.BusquedasRuta
-            .FirstOrDefaultAsync(b => b.BusquedaRutaId == busquedaRutaId);
-
-        if (busqueda == null)
-            return;
-
-        busqueda.Estado = "Sin resultado";
-        busqueda.FechaFin = DateTime.UtcNow;
-        await _context.SaveChangesAsync();
-    }
-
-    public async Task CancelarBusquedaRutaAsync(int busquedaRutaId)
-    {
-        var busqueda = await _context.BusquedasRuta
-            .FirstOrDefaultAsync(b => b.BusquedaRutaId == busquedaRutaId);
-
-        if (busqueda == null)
-            return;
-
-        busqueda.Estado = "Cancelada";
-        busqueda.FechaFin = DateTime.UtcNow;
-        await _context.SaveChangesAsync();
-    }
-
-    public async Task GuardarResultadoRutaAsync(
-        int busquedaRutaId,
-        ResultadoBusquedaRutaCompraDto resultado)
-    {
-        var busqueda = await _context.BusquedasRuta
-            .Include(b => b.ParMoneda)
-                .ThenInclude(p => p.MonedaOrigen)
-            .Include(b => b.ParMoneda)
-                .ThenInclude(p => p.MonedaDestino)
-            .FirstOrDefaultAsync(b => b.BusquedaRutaId == busquedaRutaId);
-
-        if (busqueda == null)
-            return;
-
-        busqueda.Estado = "Completada";
-        busqueda.FechaFin = DateTime.UtcNow;
-        busqueda.TotalNormal = resultado.TotalCompraNormal;
-        busqueda.TotalRuta = resultado.TotalRutaEncontrada;
-        busqueda.AhorroEstimado = resultado.AhorroEstimado;
-
-        var rutaConversion = new RutasConversion
-        {
-            BusquedaRutaId = busquedaRutaId,
-            MonedaInicialId = busqueda.ParMoneda.MonedaOrigenId,
-            MonedaFinalId = busqueda.ParMoneda.MonedaDestinoId,
-            CantidadSaltos = resultado.CantidadSaltos,
-            TotalEstimado = resultado.TotalRutaEncontrada,
-            AhorroEstimado = resultado.AhorroEstimado,
-            FechaCreacion = DateTime.UtcNow
-        };
-        _context.RutasConversion.Add(rutaConversion);
-        await _context.SaveChangesAsync();
-
-        foreach (var salto in resultado.Saltos)
-        {
-            var par = await _context.ParesMoneda
-                .FirstOrDefaultAsync(p => p.ParMonedaId == salto.ParMonedaId);
-
-            if (par == null) continue;
-
-            var saltoEntity = new RutaConversionSaltos
-            {
-                RutaConversionId = rutaConversion.RutaConversionId,
-                NumeroSalto = salto.NumeroSalto,
-                ParMonedaId = salto.ParMonedaId,
-                MonedaOrigenId = par.MonedaOrigenId,
-                MonedaDestinoId = par.MonedaDestinoId,
-                CantidadConvertida = salto.CantidadConvertida,
-                ResultadoObtenido = salto.ResultadoObtenido,
-                PrecioMinimo = salto.PrecioMinimo,
-                PrecioMaximo = salto.PrecioMaximo,
-                PrecioPromedio = salto.PrecioPromedio
-            };
-            _context.RutaConversionSaltos.Add(saltoEntity);
+            _context = context;
         }
 
-        await _context.SaveChangesAsync();
-    }
-
-    public async Task<CompraInmediataResponseDto> EjecutarCompraInmediataNormalAsync(
-        int usuarioId,
-        int parMonedaId,
-        decimal cantidadAObtener)
-    {
-        await using var tx = await _context.Database.BeginTransactionAsync();
-
-        try
+        public async Task<ParesMoneda?> ObtenerParMonedaAsync(int parMonedaId)
         {
-            var par = await _context.ParesMoneda
+            return await _context.ParesMoneda
                 .Include(p => p.MonedaOrigen)
                 .Include(p => p.MonedaDestino)
-                .FirstOrDefaultAsync(p => p.ParMonedaId == parMonedaId)
-                ?? throw new InvalidOperationException("Par de monedas no encontrado.");
+                .FirstOrDefaultAsync(p => p.ParMonedaId == parMonedaId && p.Activo);
+        }
 
-            var ofertas = await _context.OfertasVenta
-                .Where(o => o.ParMonedaId == parMonedaId
-                         && (o.Estado == "Activa" || o.Estado == "Parcialmente ejecutada")
-                         && o.CantidadPendiente > 0)
-                .OrderBy(o => o.PrecioUnitario)
+        public async Task<List<ParesMoneda>> ObtenerParesActivosAsync()
+        {
+            return await _context.ParesMoneda
+                .Include(p => p.MonedaOrigen)
+                .Include(p => p.MonedaDestino)
+                .Where(p => p.Activo)
                 .ToListAsync();
+        }
 
-            var billetaraComprador = await _context.Billeteras
-                .FirstOrDefaultAsync(b => b.UsuarioId == usuarioId)
-                ?? throw new InvalidOperationException("Billetera del comprador no encontrada.");
+        public async Task<List<OfertasVenta>> ObtenerOfertasVentaActivasAsync(int parMonedaId)
+        {
+            return await _context.OfertasVenta
+                .Where(o =>
+                    o.ParMonedaId == parMonedaId &&
+                    o.CantidadPendiente > 0 &&
+                    (o.Estado == "Activa" || o.Estado == "Parcialmente ejecutada"))
+                .OrderBy(o => o.PrecioUnitario)
+                .ThenBy(o => o.FechaCreacion)
+                .ToListAsync();
+        }
 
-            var saldoOrigenComprador = await _context.SaldosBilletera
-                .FirstOrDefaultAsync(s => s.BilleteraId == billetaraComprador.BilleteraId
-                                       && s.MonedaId == par.MonedaOrigenId)
-                ?? throw new InvalidOperationException("Saldo insuficiente en moneda de origen.");
+        public async Task<decimal> ObtenerSaldoDisponibleAsync(int usuarioId, int monedaId)
+        {
+            return await _context.SaldosBilletera
+                .Include(s => s.Billetera)
+                .Where(s => s.Billetera.UsuarioId == usuarioId && s.MonedaId == monedaId)
+                .Select(s => s.SaldoDisponible)
+                .FirstOrDefaultAsync();
+        }
 
-            var operacion = new OperacionesInmediatas
+        public async Task<BusquedasRuta> CrearBusquedaRutaAsync(
+            int usuarioId,
+            int parMonedaId,
+            decimal cantidadSolicitada,
+            int maxSaltos,
+            int tiempoEstimadoMs)
+        {
+            var busqueda = new BusquedasRuta
             {
                 UsuarioId = usuarioId,
                 ParMonedaId = parMonedaId,
                 TipoOperacion = "Compra inmediata",
-                MetodoEjecucion = "Normal",
-                CantidadSolicitada = cantidadAObtener,
-                CantidadEjecutada = 0m,
-                Estado = "Completada",
-                FechaOperacion = DateTime.UtcNow
+                CantidadSolicitada = cantidadSolicitada,
+                MaxSaltos = maxSaltos,
+                TiempoEstimadoMs = tiempoEstimadoMs,
+                Estado = "Ejecutando",
+                FechaInicio = DateTime.Now
             };
-            _context.OperacionesInmediatas.Add(operacion);
+
+            _context.BusquedasRuta.Add(busqueda);
             await _context.SaveChangesAsync();
 
-            decimal cantidadRestante = cantidadAObtener;
-            decimal totalPagado = 0m;
-            var ejecuciones = new List<DetalleEjecucionCompraDto>();
-            var preciosUsados = new List<decimal>();
-
-            foreach (var oferta in ofertas)
-            {
-                if (cantidadRestante <= 0m) break;
-
-                var cantidadTomada = Math.Min(cantidadRestante, oferta.CantidadPendiente);
-                var subTotal = cantidadTomada * oferta.PrecioUnitario;
-
-                // Actualizar oferta
-                oferta.CantidadVendida += cantidadTomada;
-                oferta.CantidadPendiente -= cantidadTomada;
-                oferta.TotalRecibido += subTotal;
-                oferta.FechaActualizacion = DateTime.UtcNow;
-                oferta.Estado = oferta.CantidadPendiente == 0 ? "Completada" : "Parcialmente ejecutada";
-
-                // Crear ejecucion de orden
-                // La oferta de venta esta ligada a una "OrdenCompra espejo" interna si aplica,
-                // pero para compra inmediata creamos una OrdenCompra temporal.
-                var ordenTemporal = new OrdenesCompra
-                {
-                    UsuarioId = usuarioId,
-                    ParMonedaId = parMonedaId,
-                    CantidadOriginal = cantidadTomada,
-                    CantidadObtenida = cantidadTomada,
-                    CantidadPendiente = 0m,
-                    PrecioUnitario = oferta.PrecioUnitario,
-                    TotalComprometido = subTotal,
-                    TotalEjecutado = subTotal,
-                    Estado = "Completada",
-                    FechaCreacion = DateTime.UtcNow,
-                    FechaActualizacion = DateTime.UtcNow
-                };
-                _context.OrdenesCompra.Add(ordenTemporal);
-                await _context.SaveChangesAsync();
-
-                var ejecucion = new EjecucionesOrden
-                {
-                    OrdenCompraId = ordenTemporal.OrdenCompraId,
-                    OfertaVentaId = oferta.OfertaVentaId,
-                    ParMonedaId = parMonedaId,
-                    CompradorId = usuarioId,
-                    VendedorId = oferta.UsuarioId,
-                    CantidadEjecutada = cantidadTomada,
-                    PrecioUnitario = oferta.PrecioUnitario,
-                    TotalOperacion = subTotal,
-                    FechaEjecucion = DateTime.UtcNow
-                };
-                _context.EjecucionesOrden.Add(ejecucion);
-                await _context.SaveChangesAsync();
-
-                var link = new OperacionInmediataEjecuciones
-                {
-                    OperacionInmediataId = operacion.OperacionInmediataId,
-                    EjecucionId = ejecucion.EjecucionId
-                };
-                _context.OperacionInmediataEjecuciones.Add(link);
-
-                // Actualizar saldos del vendedor
-                var billeteraVendedor = await _context.Billeteras
-                    .FirstOrDefaultAsync(b => b.UsuarioId == oferta.UsuarioId);
-
-                if (billeteraVendedor != null)
-                {
-                    // Vendedor pierde moneda origen (ya habia sido bloqueada) y gana moneda destino
-                    var saldoDestinoVendedor = await _context.SaldosBilletera
-                        .FirstOrDefaultAsync(s => s.BilleteraId == billeteraVendedor.BilleteraId
-                                               && s.MonedaId == par.MonedaDestinoId);
-
-                    if (saldoDestinoVendedor == null)
-                    {
-                        _context.SaldosBilletera.Add(new SaldosBilletera
-                        {
-                            BilleteraId = billeteraVendedor.BilleteraId,
-                            MonedaId = par.MonedaDestinoId,
-                            SaldoDisponible = subTotal,
-                            FechaActualizacion = DateTime.UtcNow
-                        });
-                    }
-                    else
-                    {
-                        var saldoAntVendedor = saldoDestinoVendedor.SaldoDisponible;
-                        saldoDestinoVendedor.SaldoDisponible += subTotal;
-                        saldoDestinoVendedor.FechaActualizacion = DateTime.UtcNow;
-
-                        _context.MovimientosBilletera.Add(new MovimientosBilletera
-                        {
-                            UsuarioId = oferta.UsuarioId,
-                            MonedaId = par.MonedaDestinoId,
-                            TipoMovimiento = "Venta",
-                            Monto = subTotal,
-                            SaldoAnterior = saldoAntVendedor,
-                            SaldoPosterior = saldoDestinoVendedor.SaldoDisponible,
-                            FechaMovimiento = DateTime.UtcNow,
-                            ReferenciaTipo = "EjecucionOrden",
-                            ReferenciaId = ejecucion.EjecucionId
-                        });
-                    }
-                }
-
-                cantidadRestante -= cantidadTomada;
-                totalPagado += subTotal;
-                preciosUsados.Add(oferta.PrecioUnitario);
-
-                ejecuciones.Add(new DetalleEjecucionCompraDto
-                {
-                    EjecucionId = ejecucion.EjecucionId,
-                    OfertaVentaId = oferta.OfertaVentaId,
-                    VendedorId = oferta.UsuarioId,
-                    CantidadEjecutada = cantidadTomada,
-                    PrecioUnitario = oferta.PrecioUnitario,
-                    TotalOperacion = subTotal,
-                    FechaEjecucion = ejecucion.FechaEjecucion
-                });
-            }
-
-            decimal cantidadEjecutada = cantidadAObtener - cantidadRestante;
-
-            // Descontar saldo del comprador (moneda origen)
-            var saldoAntComprador = saldoOrigenComprador.SaldoDisponible;
-            saldoOrigenComprador.SaldoDisponible -= totalPagado;
-            saldoOrigenComprador.FechaActualizacion = DateTime.UtcNow;
-
-            _context.MovimientosBilletera.Add(new MovimientosBilletera
-            {
-                UsuarioId = usuarioId,
-                MonedaId = par.MonedaOrigenId,
-                TipoMovimiento = "Compra",
-                Monto = totalPagado,
-                SaldoAnterior = saldoAntComprador,
-                SaldoPosterior = saldoOrigenComprador.SaldoDisponible,
-                FechaMovimiento = DateTime.UtcNow,
-                ReferenciaTipo = "OperacionInmediata",
-                ReferenciaId = operacion.OperacionInmediataId
-            });
-
-            // Acreditar moneda destino al comprador
-            var saldoDestinoComprador = await _context.SaldosBilletera
-                .FirstOrDefaultAsync(s => s.BilleteraId == billetaraComprador.BilleteraId
-                                       && s.MonedaId == par.MonedaDestinoId);
-
-            if (saldoDestinoComprador == null)
-            {
-                saldoDestinoComprador = new SaldosBilletera
-                {
-                    BilleteraId = billetaraComprador.BilleteraId,
-                    MonedaId = par.MonedaDestinoId,
-                    SaldoDisponible = cantidadEjecutada,
-                    FechaActualizacion = DateTime.UtcNow
-                };
-                _context.SaldosBilletera.Add(saldoDestinoComprador);
-                await _context.SaveChangesAsync();
-            }
-            else
-            {
-                var saldoAntDest = saldoDestinoComprador.SaldoDisponible;
-                saldoDestinoComprador.SaldoDisponible += cantidadEjecutada;
-                saldoDestinoComprador.FechaActualizacion = DateTime.UtcNow;
-
-                _context.MovimientosBilletera.Add(new MovimientosBilletera
-                {
-                    UsuarioId = usuarioId,
-                    MonedaId = par.MonedaDestinoId,
-                    TipoMovimiento = "Recepcion compra",
-                    Monto = cantidadEjecutada,
-                    SaldoAnterior = saldoAntDest,
-                    SaldoPosterior = saldoDestinoComprador.SaldoDisponible,
-                    FechaMovimiento = DateTime.UtcNow,
-                    ReferenciaTipo = "OperacionInmediata",
-                    ReferenciaId = operacion.OperacionInmediataId
-                });
-            }
-
-            // Actualizar la operacion inmediata
-            operacion.CantidadEjecutada = cantidadEjecutada;
-            operacion.TotalPagado = totalPagado;
-            operacion.TotalRecibido = cantidadEjecutada;
-            operacion.PrecioMinimo = preciosUsados.Count > 0 ? preciosUsados.Min() : null;
-            operacion.PrecioMaximo = preciosUsados.Count > 0 ? preciosUsados.Max() : null;
-            operacion.PrecioPromedio = cantidadEjecutada > 0 ? totalPagado / cantidadEjecutada : null;
-
-            // Historial
-            _context.HistorialTransacciones.Add(new HistorialTransacciones
-            {
-                UsuarioId = usuarioId,
-                TipoOperacion = "Compra inmediata",
-                ReferenciaId = operacion.OperacionInmediataId,
-                ParMonedaId = parMonedaId,
-                FechaHora = DateTime.UtcNow,
-                Estado = "Completada",
-                MetodoEjecucion = "Normal"
-            });
-
-            await _context.SaveChangesAsync();
-            await tx.CommitAsync();
-
-            return new CompraInmediataResponseDto
-            {
-                OperacionInmediataId = operacion.OperacionInmediataId,
-                ParMonedaId = parMonedaId,
-                TipoOperacion = "Compra inmediata",
-                MetodoEjecucion = "Normal",
-                MonedaOrigen = par.MonedaOrigen.CodigoIso,
-                MonedaDestino = par.MonedaDestino.CodigoIso,
-                CantidadSolicitada = cantidadAObtener,
-                CantidadEjecutada = cantidadEjecutada,
-                PrecioMinimo = operacion.PrecioMinimo,
-                PrecioMaximo = operacion.PrecioMaximo,
-                PrecioPromedio = operacion.PrecioPromedio,
-                TotalPagado = totalPagado,
-                Estado = "Completada",
-                FechaOperacion = operacion.FechaOperacion,
-                Ejecuciones = ejecuciones
-            };
+            return busqueda;
         }
-        catch
+
+        public async Task<BusquedasRuta?> ObtenerBusquedaRutaAsync(int busquedaRutaId, int usuarioId)
         {
-            await tx.RollbackAsync();
-            throw;
+            return await _context.BusquedasRuta
+                .FirstOrDefaultAsync(b =>
+                    b.BusquedaRutaId == busquedaRutaId &&
+                    b.UsuarioId == usuarioId);
         }
-    }
 
-    public async Task<CompraInmediataResponseDto> EjecutarCompraInmediataPorRutaAsync(
-        int usuarioId,
-        int busquedaRutaId)
-    {
-        await using var tx = await _context.Database.BeginTransactionAsync();
-
-        try
+        public async Task<BusquedasRuta?> ObtenerBusquedaRutaConSaltosAsync(int busquedaRutaId, int usuarioId)
         {
-            var busqueda = await _context.BusquedasRuta
+            return await _context.BusquedasRuta
                 .Include(b => b.RutasConversion)
-                    .ThenInclude(r => r.RutaConversionSaltos.OrderBy(s => s.NumeroSalto))
+                    .ThenInclude(r => r.RutaConversionSaltos)
                         .ThenInclude(s => s.ParMoneda)
                             .ThenInclude(p => p.MonedaOrigen)
                 .Include(b => b.RutasConversion)
                     .ThenInclude(r => r.RutaConversionSaltos)
                         .ThenInclude(s => s.ParMoneda)
                             .ThenInclude(p => p.MonedaDestino)
+                .FirstOrDefaultAsync(b =>
+                    b.BusquedaRutaId == busquedaRutaId &&
+                    b.UsuarioId == usuarioId);
+        }
+
+        public async Task FinalizarBusquedaRutaSinResultadoAsync(int busquedaRutaId)
+        {
+            var busqueda = await _context.BusquedasRuta.FindAsync(busquedaRutaId);
+
+            if (busqueda == null)
+                return;
+
+            busqueda.Estado = "Sin resultado";
+            busqueda.FechaFin = DateTime.Now;
+
+            await _context.SaveChangesAsync();
+        }
+
+        public async Task CancelarBusquedaRutaAsync(int busquedaRutaId)
+        {
+            var busqueda = await _context.BusquedasRuta.FindAsync(busquedaRutaId);
+
+            if (busqueda == null)
+                return;
+
+            busqueda.Estado = "Cancelada";
+            busqueda.FechaFin = DateTime.Now;
+
+            await _context.SaveChangesAsync();
+        }
+
+        public async Task GuardarResultadoRutaAsync(
+            int busquedaRutaId,
+            ResultadoBusquedaRutaCompraDto resultado)
+        {
+            var busqueda = await _context.BusquedasRuta
                 .Include(b => b.ParMoneda)
-                    .ThenInclude(p => p.MonedaOrigen)
-                .Include(b => b.ParMoneda)
-                    .ThenInclude(p => p.MonedaDestino)
-                .FirstOrDefaultAsync(b => b.BusquedaRutaId == busquedaRutaId && b.UsuarioId == usuarioId)
-                ?? throw new InvalidOperationException("Busqueda de ruta no encontrada.");
+                .FirstOrDefaultAsync(b => b.BusquedaRutaId == busquedaRutaId);
 
-            var ruta = busqueda.RutasConversion.FirstOrDefault()
-                ?? throw new InvalidOperationException("No hay ruta guardada para esta busqueda.");
+            if (busqueda == null)
+                throw new ArgumentException("La búsqueda no existe.");
 
-            var saltos = ruta.RutaConversionSaltos.OrderBy(s => s.NumeroSalto).ToList();
+            busqueda.Estado = "Completada";
+            busqueda.TotalNormal = resultado.TotalCompraNormal;
+            busqueda.TotalRuta = resultado.TotalRutaEncontrada;
+            busqueda.AhorroEstimado = resultado.AhorroEstimado;
+            busqueda.FechaFin = DateTime.Now;
 
-            // Operacion padre
-            var operacionPadre = new OperacionesInmediatas
+            var ruta = new RutasConversion
+            {
+                BusquedaRutaId = busquedaRutaId,
+                MonedaInicialId = busqueda.ParMoneda.MonedaOrigenId,
+                MonedaFinalId = busqueda.ParMoneda.MonedaDestinoId,
+                CantidadSaltos = resultado.Saltos.Count,
+                TotalEstimado = resultado.TotalRutaEncontrada,
+                AhorroEstimado = resultado.AhorroEstimado,
+                FechaCreacion = DateTime.Now
+            };
+
+            _context.RutasConversion.Add(ruta);
+            await _context.SaveChangesAsync();
+
+            foreach (var saltoDto in resultado.Saltos)
+            {
+                var par = await _context.ParesMoneda
+                    .FirstAsync(p => p.ParMonedaId == saltoDto.ParMonedaId);
+
+                var salto = new RutaConversionSaltos
+                {
+                    RutaConversionId = ruta.RutaConversionId,
+                    NumeroSalto = saltoDto.NumeroSalto,
+                    ParMonedaId = saltoDto.ParMonedaId,
+                    MonedaOrigenId = par.MonedaOrigenId,
+                    MonedaDestinoId = par.MonedaDestinoId,
+                    CantidadConvertida = saltoDto.CantidadConvertida,
+                    ResultadoObtenido = saltoDto.ResultadoObtenido,
+                    PrecioMinimo = saltoDto.PrecioMinimo,
+                    PrecioMaximo = saltoDto.PrecioMaximo,
+                    PrecioPromedio = saltoDto.PrecioPromedio
+                };
+
+                _context.RutaConversionSaltos.Add(salto);
+            }
+
+            await _context.SaveChangesAsync();
+        }
+
+        public async Task<CompraInmediataResponseDto> EjecutarCompraInmediataNormalAsync(
+            int usuarioId,
+            int parMonedaId,
+            decimal cantidadAObtener)
+        {
+            using var transaction = await _context.Database.BeginTransactionAsync();
+
+            var result = await EjecutarCompraNormalInternaAsync(
+                usuarioId,
+                parMonedaId,
+                cantidadAObtener,
+                "Normal",
+                null);
+
+            await transaction.CommitAsync();
+
+            return result;
+        }
+
+        public async Task<CompraInmediataResponseDto> EjecutarCompraInmediataPorRutaAsync(
+    int usuarioId,
+    int busquedaRutaId)
+        {
+            using var transaction = await _context.Database.BeginTransactionAsync();
+
+            var busqueda = await _context.BusquedasRuta
+                .Include(b => b.RutasConversion)
+                    .ThenInclude(r => r.RutaConversionSaltos)
+                .FirstOrDefaultAsync(b =>
+                    b.BusquedaRutaId == busquedaRutaId &&
+                    b.UsuarioId == usuarioId);
+
+            if (busqueda == null)
+                throw new ArgumentException("La búsqueda no existe.");
+
+            if (busqueda.Estado != "Completada")
+                throw new InvalidOperationException("La búsqueda no tiene una ruta disponible para confirmar.");
+
+            var ruta = busqueda.RutasConversion.FirstOrDefault();
+
+            if (ruta == null)
+                throw new InvalidOperationException("La ruta no fue registrada.");
+
+            var parent = new OperacionesInmediatas
             {
                 UsuarioId = usuarioId,
                 ParMonedaId = busqueda.ParMonedaId,
                 TipoOperacion = "Compra inmediata",
-                MetodoEjecucion = "Ruta",
+                MetodoEjecucion = "Mejor ruta",
                 CantidadSolicitada = busqueda.CantidadSolicitada,
-                CantidadEjecutada = 0m,
+                CantidadEjecutada = busqueda.CantidadSolicitada,
+                TotalPagado = busqueda.TotalRuta ?? 0,
                 Estado = "Completada",
-                FechaOperacion = DateTime.UtcNow
+                FechaOperacion = DateTime.Now
             };
-            _context.OperacionesInmediatas.Add(operacionPadre);
+
+            _context.OperacionesInmediatas.Add(parent);
             await _context.SaveChangesAsync();
 
-            decimal cantidadActual = busqueda.CantidadSolicitada;
-            decimal totalPagadoTotal = 0m;
+            var saltos = ruta.RutaConversionSaltos
+                .OrderBy(s => s.NumeroSalto)
+                .ToList();
+
+            var operacionesHijas = new List<CompraInmediataResponseDto>();
 
             foreach (var salto in saltos)
             {
-                var parSalto = salto.ParMoneda;
+                var child = await EjecutarCompraNormalInternaAsync(
+                    usuarioId,
+                    salto.ParMonedaId,
+                    salto.ResultadoObtenido,
+                    "Mejor ruta",
+                    parent.OperacionInmediataId);
 
-                var operacionHija = new OperacionesInmediatas
-                {
-                    UsuarioId = usuarioId,
-                    ParMonedaId = salto.ParMonedaId,
-                    TipoOperacion = "Compra inmediata",
-                    MetodoEjecucion = "Ruta - salto",
-                    CantidadSolicitada = salto.ResultadoObtenido,
-                    CantidadEjecutada = 0m,
-                    Estado = "Completada",
-                    OperacionPadreId = operacionPadre.OperacionInmediataId,
-                    FechaOperacion = DateTime.UtcNow
-                };
-                _context.OperacionesInmediatas.Add(operacionHija);
-                await _context.SaveChangesAsync();
+                operacionesHijas.Add(child);
 
-                // Actualizar referencia en salto
-                salto.OperacionInmediataId = operacionPadre.OperacionInmediataId;
-                salto.OperacionInmediataHijaId = operacionHija.OperacionInmediataId;
-
-                var ofertas = await _context.OfertasVenta
-                    .Where(o => o.ParMonedaId == salto.ParMonedaId
-                             && (o.Estado == "Activa" || o.Estado == "Parcialmente ejecutada")
-                             && o.CantidadPendiente > 0)
-                    .OrderBy(o => o.PrecioUnitario)
-                    .ToListAsync();
-
-                var billetaraComprador = await _context.Billeteras
-                    .FirstOrDefaultAsync(b => b.UsuarioId == usuarioId)
-                    ?? throw new InvalidOperationException("Billetera del comprador no encontrada.");
-
-                var saldoOrigen = await _context.SaldosBilletera
-                    .FirstOrDefaultAsync(s => s.BilleteraId == billetaraComprador.BilleteraId
-                                           && s.MonedaId == parSalto.MonedaOrigenId)
-                    ?? throw new InvalidOperationException("Saldo insuficiente para el salto.");
-
-                decimal cantidadNecesaria = salto.ResultadoObtenido;
-                decimal cantidadRestante = cantidadNecesaria;
-                decimal totalPagadoSalto = 0m;
-                decimal cantidadEjecutadaSalto = 0m;
-                var preciosSalto = new List<decimal>();
-
-                foreach (var oferta in ofertas)
-                {
-                    if (cantidadRestante <= 0m) break;
-
-                    var cantidadTomada = Math.Min(cantidadRestante, oferta.CantidadPendiente);
-                    var subTotal = cantidadTomada * oferta.PrecioUnitario;
-
-                    oferta.CantidadVendida += cantidadTomada;
-                    oferta.CantidadPendiente -= cantidadTomada;
-                    oferta.TotalRecibido += subTotal;
-                    oferta.FechaActualizacion = DateTime.UtcNow;
-                    oferta.Estado = oferta.CantidadPendiente == 0 ? "Completada" : "Parcialmente ejecutada";
-
-                    var ordenTemporal = new OrdenesCompra
-                    {
-                        UsuarioId = usuarioId,
-                        ParMonedaId = salto.ParMonedaId,
-                        CantidadOriginal = cantidadTomada,
-                        CantidadObtenida = cantidadTomada,
-                        CantidadPendiente = 0m,
-                        PrecioUnitario = oferta.PrecioUnitario,
-                        TotalComprometido = subTotal,
-                        TotalEjecutado = subTotal,
-                        Estado = "Completada",
-                        FechaCreacion = DateTime.UtcNow,
-                        FechaActualizacion = DateTime.UtcNow
-                    };
-                    _context.OrdenesCompra.Add(ordenTemporal);
-                    await _context.SaveChangesAsync();
-
-                    var ejecucion = new EjecucionesOrden
-                    {
-                        OrdenCompraId = ordenTemporal.OrdenCompraId,
-                        OfertaVentaId = oferta.OfertaVentaId,
-                        ParMonedaId = salto.ParMonedaId,
-                        CompradorId = usuarioId,
-                        VendedorId = oferta.UsuarioId,
-                        CantidadEjecutada = cantidadTomada,
-                        PrecioUnitario = oferta.PrecioUnitario,
-                        TotalOperacion = subTotal,
-                        FechaEjecucion = DateTime.UtcNow
-                    };
-                    _context.EjecucionesOrden.Add(ejecucion);
-                    await _context.SaveChangesAsync();
-
-                    _context.OperacionInmediataEjecuciones.Add(new OperacionInmediataEjecuciones
-                    {
-                        OperacionInmediataId = operacionHija.OperacionInmediataId,
-                        EjecucionId = ejecucion.EjecucionId
-                    });
-
-                    cantidadRestante -= cantidadTomada;
-                    cantidadEjecutadaSalto += cantidadTomada;
-                    totalPagadoSalto += subTotal;
-                    preciosSalto.Add(oferta.PrecioUnitario);
-                }
-
-                // Descontar moneda origen al comprador
-                var saldoAntOrigen = saldoOrigen.SaldoDisponible;
-                saldoOrigen.SaldoDisponible -= totalPagadoSalto;
-                saldoOrigen.FechaActualizacion = DateTime.UtcNow;
-
-                _context.MovimientosBilletera.Add(new MovimientosBilletera
-                {
-                    UsuarioId = usuarioId,
-                    MonedaId = parSalto.MonedaOrigenId,
-                    TipoMovimiento = "Compra ruta",
-                    Monto = totalPagadoSalto,
-                    SaldoAnterior = saldoAntOrigen,
-                    SaldoPosterior = saldoOrigen.SaldoDisponible,
-                    FechaMovimiento = DateTime.UtcNow,
-                    ReferenciaTipo = "OperacionInmediata",
-                    ReferenciaId = operacionHija.OperacionInmediataId
-                });
-
-                // Acreditar moneda destino al comprador
-                var saldoDestino = await _context.SaldosBilletera
-                    .FirstOrDefaultAsync(s => s.BilleteraId == billetaraComprador.BilleteraId
-                                           && s.MonedaId == parSalto.MonedaDestinoId);
-
-                if (saldoDestino == null)
-                {
-                    saldoDestino = new SaldosBilletera
-                    {
-                        BilleteraId = billetaraComprador.BilleteraId,
-                        MonedaId = parSalto.MonedaDestinoId,
-                        SaldoDisponible = cantidadEjecutadaSalto,
-                        FechaActualizacion = DateTime.UtcNow
-                    };
-                    _context.SaldosBilletera.Add(saldoDestino);
-                    await _context.SaveChangesAsync();
-                }
-                else
-                {
-                    var saldoAntDest = saldoDestino.SaldoDisponible;
-                    saldoDestino.SaldoDisponible += cantidadEjecutadaSalto;
-                    saldoDestino.FechaActualizacion = DateTime.UtcNow;
-
-                    _context.MovimientosBilletera.Add(new MovimientosBilletera
-                    {
-                        UsuarioId = usuarioId,
-                        MonedaId = parSalto.MonedaDestinoId,
-                        TipoMovimiento = "Recepcion compra ruta",
-                        Monto = cantidadEjecutadaSalto,
-                        SaldoAnterior = saldoAntDest,
-                        SaldoPosterior = saldoDestino.SaldoDisponible,
-                        FechaMovimiento = DateTime.UtcNow,
-                        ReferenciaTipo = "OperacionInmediata",
-                        ReferenciaId = operacionHija.OperacionInmediataId
-                    });
-                }
-
-                // Actualizar operacion hija
-                operacionHija.CantidadEjecutada = cantidadEjecutadaSalto;
-                operacionHija.TotalPagado = totalPagadoSalto;
-                operacionHija.TotalRecibido = cantidadEjecutadaSalto;
-                operacionHija.PrecioMinimo = preciosSalto.Count > 0 ? preciosSalto.Min() : null;
-                operacionHija.PrecioMaximo = preciosSalto.Count > 0 ? preciosSalto.Max() : null;
-                operacionHija.PrecioPromedio = cantidadEjecutadaSalto > 0 ? totalPagadoSalto / cantidadEjecutadaSalto : null;
-
-                cantidadActual = cantidadEjecutadaSalto;
-                totalPagadoTotal = salto.NumeroSalto == 1 ? totalPagadoSalto : totalPagadoTotal;
+                salto.OperacionInmediataHijaId = child.OperacionInmediataId;
+                salto.OperacionInmediataId = parent.OperacionInmediataId;
             }
 
-            // Actualizar operacion padre
-            operacionPadre.CantidadEjecutada = cantidadActual;
-            operacionPadre.TotalPagado = totalPagadoTotal;
-            operacionPadre.TotalRecibido = cantidadActual;
+            ruta.OperacionInmediataId = parent.OperacionInmediataId;
 
-            // Historial
+            if (operacionesHijas.Any())
+            {
+                var costoInicial = operacionesHijas.First().TotalPagado;
+
+                parent.TotalPagado = costoInicial;
+
+                parent.PrecioMinimo = operacionesHijas
+                    .Where(o => o.PrecioMinimo.HasValue)
+                    .Select(o => o.PrecioMinimo!.Value)
+                    .DefaultIfEmpty()
+                    .Min();
+
+                parent.PrecioMaximo = operacionesHijas
+                    .Where(o => o.PrecioMaximo.HasValue)
+                    .Select(o => o.PrecioMaximo!.Value)
+                    .DefaultIfEmpty()
+                    .Max();
+
+                parent.PrecioPromedio = busqueda.CantidadSolicitada > 0
+                    ? costoInicial / busqueda.CantidadSolicitada
+                    : null;
+            }
+
             _context.HistorialTransacciones.Add(new HistorialTransacciones
             {
                 UsuarioId = usuarioId,
                 TipoOperacion = "Compra inmediata",
-                ReferenciaId = operacionPadre.OperacionInmediataId,
-                ParMonedaId = busqueda.ParMonedaId,
-                FechaHora = DateTime.UtcNow,
+                ReferenciaId = parent.OperacionInmediataId,
+                ParMonedaId = parent.ParMonedaId,
                 Estado = "Completada",
-                MetodoEjecucion = "Ruta"
+                MetodoEjecucion = "Mejor ruta",
+                FechaHora = DateTime.Now
             });
 
+            await CrearNotificacionAsync(
+                usuarioId,
+                "Mejor ruta",
+                "Compra mediante mejor ruta ejecutada",
+                $"Tu compra mediante mejor ruta fue ejecutada por un total de {parent.TotalPagado}.",
+                "OperacionInmediata",
+                parent.OperacionInmediataId);
+
             await _context.SaveChangesAsync();
-            await tx.CommitAsync();
+            await transaction.CommitAsync();
+
+            return await ConstruirRespuestaCompraAsync(parent.OperacionInmediataId);
+        }
+
+        private async Task<CompraInmediataResponseDto> EjecutarCompraNormalInternaAsync(
+            int usuarioId,
+            int parMonedaId,
+            decimal cantidadAObtener,
+            string metodoEjecucion,
+            int? operacionPadreId)
+        {
+            var par = await _context.ParesMoneda
+                .Include(p => p.MonedaOrigen)
+                .Include(p => p.MonedaDestino)
+                .FirstOrDefaultAsync(p => p.ParMonedaId == parMonedaId);
+
+            if (par == null)
+                throw new ArgumentException("El par de monedas no existe.");
+
+            var ofertas = await ObtenerOfertasVentaActivasAsync(parMonedaId);
+
+            decimal cantidadPendiente = cantidadAObtener;
+            decimal cantidadEjecutada = 0;
+            decimal totalPagado = 0;
+
+            var ofertasUsadas = new List<(OfertasVenta oferta, decimal cantidad, decimal total)>();
+
+            foreach (var oferta in ofertas)
+            {
+                if (cantidadPendiente <= 0)
+                    break;
+
+                var cantidadTomada = Math.Min(cantidadPendiente, oferta.CantidadPendiente);
+                var totalOperacion = cantidadTomada * oferta.PrecioUnitario;
+
+                ofertasUsadas.Add((oferta, cantidadTomada, totalOperacion));
+
+                cantidadEjecutada += cantidadTomada;
+                totalPagado += totalOperacion;
+                cantidadPendiente -= cantidadTomada;
+            }
+
+            if (cantidadEjecutada <= 0)
+                throw new InvalidOperationException("No existe liquidez disponible.");
+
+            if (cantidadEjecutada < cantidadAObtener)
+                throw new InvalidOperationException("No existe suficiente liquidez para cubrir toda la cantidad solicitada.");
+
+            var saldoCompradorOrigen = await ObtenerSaldoEntityAsync(usuarioId, par.MonedaOrigenId);
+            var saldoCompradorDestino = await ObtenerSaldoEntityAsync(usuarioId, par.MonedaDestinoId);
+
+            if (saldoCompradorOrigen.SaldoDisponible < totalPagado)
+                throw new InvalidOperationException("Saldo insuficiente.");
+
+            var saldoAnteriorCompradorOrigen = saldoCompradorOrigen.SaldoDisponible;
+            var saldoAnteriorCompradorDestino = saldoCompradorDestino.SaldoDisponible;
+
+            saldoCompradorOrigen.SaldoDisponible -= totalPagado;
+            saldoCompradorDestino.SaldoDisponible += cantidadEjecutada;
+
+            var operacion = new OperacionesInmediatas
+            {
+                UsuarioId = usuarioId,
+                ParMonedaId = parMonedaId,
+                TipoOperacion = "Compra inmediata",
+                MetodoEjecucion = metodoEjecucion,
+                CantidadSolicitada = cantidadAObtener,
+                CantidadEjecutada = cantidadEjecutada,
+                PrecioMinimo = ofertasUsadas.Min(x => x.oferta.PrecioUnitario),
+                PrecioMaximo = ofertasUsadas.Max(x => x.oferta.PrecioUnitario),
+                PrecioPromedio = totalPagado / cantidadEjecutada,
+                TotalPagado = totalPagado,
+                Estado = "Completada",
+                FechaOperacion = DateTime.Now,
+                OperacionPadreId = operacionPadreId
+            };
+
+            _context.OperacionesInmediatas.Add(operacion);
+            await _context.SaveChangesAsync();
+
+            var ordenInterna = new OrdenesCompra
+            {
+                UsuarioId = usuarioId,
+                ParMonedaId = parMonedaId,
+                CantidadOriginal = cantidadEjecutada,
+                CantidadObtenida = cantidadEjecutada,
+                CantidadPendiente = 0,
+                PrecioUnitario = operacion.PrecioPromedio ?? 0,
+                TotalComprometido = totalPagado,
+                TotalEjecutado = totalPagado,
+                Estado = "Completada",
+                FechaCreacion = DateTime.Now,
+                FechaActualizacion = DateTime.Now
+            };
+
+            _context.OrdenesCompra.Add(ordenInterna);
+            await _context.SaveChangesAsync();
+
+            _context.MovimientosBilletera.Add(new MovimientosBilletera
+            {
+                UsuarioId = usuarioId,
+                MonedaId = par.MonedaOrigenId,
+                TipoMovimiento = "CompraInmediata",
+                Monto = -totalPagado,
+                SaldoAnterior = saldoAnteriorCompradorOrigen,
+                SaldoPosterior = saldoCompradorOrigen.SaldoDisponible,
+                FechaMovimiento = DateTime.Now,
+                ReferenciaTipo = "OperacionInmediata",
+                ReferenciaId = operacion.OperacionInmediataId
+            });
+
+            _context.MovimientosBilletera.Add(new MovimientosBilletera
+            {
+                UsuarioId = usuarioId,
+                MonedaId = par.MonedaDestinoId,
+                TipoMovimiento = "CompraInmediata",
+                Monto = cantidadEjecutada,
+                SaldoAnterior = saldoAnteriorCompradorDestino,
+                SaldoPosterior = saldoCompradorDestino.SaldoDisponible,
+                FechaMovimiento = DateTime.Now,
+                ReferenciaTipo = "OperacionInmediata",
+                ReferenciaId = operacion.OperacionInmediataId
+            });
+
+            foreach (var item in ofertasUsadas)
+            {
+                var oferta = item.oferta;
+                var cantidad = item.cantidad;
+                var total = item.total;
+
+                oferta.CantidadVendida += cantidad;
+                oferta.CantidadPendiente -= cantidad;
+                oferta.TotalRecibido += total;
+                oferta.FechaActualizacion = DateTime.Now;
+                oferta.Estado = oferta.CantidadPendiente == 0
+                    ? "Completada"
+                    : "Parcialmente ejecutada";
+
+                await SincronizarOrdenEspejoDesdeOfertaAsync(oferta, cantidad, total);
+
+                var saldoVendedorOrigen = await ObtenerSaldoEntityAsync(oferta.UsuarioId, par.MonedaOrigenId);
+                var saldoAnteriorVendedor = saldoVendedorOrigen.SaldoDisponible;
+
+                saldoVendedorOrigen.SaldoDisponible += total;
+                saldoVendedorOrigen.FechaActualizacion = DateTime.Now;
+
+                var ejecucion = new EjecucionesOrden
+                {
+                    OrdenCompraId = ordenInterna.OrdenCompraId,
+                    OfertaVentaId = oferta.OfertaVentaId,
+                    ParMonedaId = parMonedaId,
+                    CompradorId = usuarioId,
+                    VendedorId = oferta.UsuarioId,
+                    CantidadEjecutada = cantidad,
+                    PrecioUnitario = oferta.PrecioUnitario,
+                    TotalOperacion = total,
+                    FechaEjecucion = DateTime.Now
+                };
+
+                _context.EjecucionesOrden.Add(ejecucion);
+                await _context.SaveChangesAsync();
+
+                _context.OperacionInmediataEjecuciones.Add(new OperacionInmediataEjecuciones
+                {
+                    OperacionInmediataId = operacion.OperacionInmediataId,
+                    EjecucionId = ejecucion.EjecucionId
+                });
+
+                _context.MovimientosBilletera.Add(new MovimientosBilletera
+                {
+                    UsuarioId = oferta.UsuarioId,
+                    MonedaId = par.MonedaOrigenId,
+                    TipoMovimiento = "VentaInmediata",
+                    Monto = total,
+                    SaldoAnterior = saldoAnteriorVendedor,
+                    SaldoPosterior = saldoVendedorOrigen.SaldoDisponible,
+                    FechaMovimiento = DateTime.Now,
+                    ReferenciaTipo = "EjecucionOrden",
+                    ReferenciaId = ejecucion.EjecucionId
+                });
+
+                await CrearNotificacionAsync(
+                    oferta.UsuarioId,
+                    "Oferta parcial",
+                    "Oferta ejecutada",
+                    $"Tu oferta recibió una ejecución por {cantidad} unidades.",
+                    "EjecucionOrden",
+                    ejecucion.EjecucionId);
+            }
+
+            _context.HistorialTransacciones.Add(new HistorialTransacciones
+            {
+                UsuarioId = usuarioId,
+                TipoOperacion = "Compra inmediata",
+                ReferenciaId = operacion.OperacionInmediataId,
+                ParMonedaId = parMonedaId,
+                Estado = "Completada",
+                MetodoEjecucion = metodoEjecucion,
+                FechaHora = DateTime.Now
+            });
+
+            await CrearNotificacionAsync(
+                usuarioId,
+                metodoEjecucion == "Mejor ruta" ? "Mejor ruta" : "Compra inmediata",
+                "Compra inmediata ejecutada",
+                $"Tu compra inmediata fue ejecutada por un total de {totalPagado}.",
+                "OperacionInmediata",
+                operacion.OperacionInmediataId);
+
+            await _context.SaveChangesAsync();
+
+            return await ConstruirRespuestaCompraAsync(operacion.OperacionInmediataId);
+        }
+
+        private async Task<SaldosBilletera> ObtenerSaldoEntityAsync(int usuarioId, int monedaId)
+        {
+            return await _context.SaldosBilletera
+                .Include(s => s.Billetera)
+                .FirstAsync(s =>
+                    s.Billetera.UsuarioId == usuarioId &&
+                    s.MonedaId == monedaId);
+        }
+
+        private async Task CrearNotificacionAsync(
+            int usuarioId,
+            string tipoEvento,
+            string asunto,
+            string cuerpo,
+            string referenciaTipo,
+            int referenciaId)
+        {
+            var usuario = await _context.Usuarios.FirstAsync(u => u.UsuarioId == usuarioId);
+
+            var tipo = await _context.TiposNotificacion
+                .FirstOrDefaultAsync(t => t.Nombre == tipoEvento);
+
+            _context.NotificacionesCorreo.Add(new NotificacionesCorreo
+            {
+                UsuarioId = usuarioId,
+                CorreoDestino = usuario.CorreoElectronico,
+                TipoEvento = tipoEvento,
+                TipoNotificacionId = tipo?.TipoNotificacionId,
+                Asunto = asunto,
+                Cuerpo = cuerpo,
+                EstadoEnvio = "Pendiente",
+                FechaCreacion = DateTime.Now,
+                ReferenciaTipo = referenciaTipo,
+                ReferenciaId = referenciaId
+            });
+        }
+
+        private async Task<CompraInmediataResponseDto> ConstruirRespuestaCompraAsync(int operacionInmediataId)
+        {
+            var operacion = await _context.OperacionesInmediatas
+                .Include(o => o.ParMoneda)
+                    .ThenInclude(p => p.MonedaOrigen)
+                .Include(o => o.ParMoneda)
+                    .ThenInclude(p => p.MonedaDestino)
+                .FirstAsync(o => o.OperacionInmediataId == operacionInmediataId);
+
+            var ejecuciones = await _context.OperacionInmediataEjecuciones
+                .Include(x => x.Ejecucion)
+                .Where(x => x.OperacionInmediataId == operacionInmediataId)
+                .Select(x => new DetalleEjecucionCompraDto
+                {
+                    EjecucionId = x.EjecucionId,
+                    OfertaVentaId = x.Ejecucion.OfertaVentaId,
+                    VendedorId = x.Ejecucion.VendedorId,
+                    CantidadEjecutada = x.Ejecucion.CantidadEjecutada,
+                    PrecioUnitario = x.Ejecucion.PrecioUnitario,
+                    TotalOperacion = x.Ejecucion.TotalOperacion,
+                    FechaEjecucion = x.Ejecucion.FechaEjecucion
+                })
+                .ToListAsync();
 
             return new CompraInmediataResponseDto
             {
-                OperacionInmediataId = operacionPadre.OperacionInmediataId,
-                ParMonedaId = busqueda.ParMonedaId,
-                TipoOperacion = "Compra inmediata",
-                MetodoEjecucion = "Ruta",
-                MonedaOrigen = busqueda.ParMoneda.MonedaOrigen.CodigoIso,
-                MonedaDestino = busqueda.ParMoneda.MonedaDestino.CodigoIso,
-                CantidadSolicitada = busqueda.CantidadSolicitada,
-                CantidadEjecutada = cantidadActual,
-                TotalPagado = totalPagadoTotal,
-                Estado = "Completada",
-                FechaOperacion = operacionPadre.FechaOperacion,
-                Ejecuciones = new List<DetalleEjecucionCompraDto>()
+                OperacionInmediataId = operacion.OperacionInmediataId,
+                ParMonedaId = operacion.ParMonedaId,
+                TipoOperacion = operacion.TipoOperacion,
+                MetodoEjecucion = operacion.MetodoEjecucion,
+                MonedaOrigen = operacion.ParMoneda.MonedaOrigen.CodigoIso,
+                MonedaDestino = operacion.ParMoneda.MonedaDestino.CodigoIso,
+                CantidadSolicitada = operacion.CantidadSolicitada,
+                CantidadEjecutada = operacion.CantidadEjecutada,
+                PrecioMinimo = operacion.PrecioMinimo,
+                PrecioMaximo = operacion.PrecioMaximo,
+                PrecioPromedio = operacion.PrecioPromedio,
+                TotalPagado = operacion.TotalPagado ?? 0,
+                Estado = operacion.Estado,
+                FechaOperacion = operacion.FechaOperacion,
+                Ejecuciones = ejecuciones
             };
         }
-        catch
-        {
-            await tx.RollbackAsync();
-            throw;
-        }
+
+        private async Task SincronizarOrdenEspejoDesdeOfertaAsync(
+			OfertasVenta oferta,
+			decimal cantidadVendida,
+			decimal totalRecibido)
+		{
+			if (oferta.OrdenCompraEspejoId == null)
+				return;
+
+			var ordenEspejo = await _context.OrdenesCompra
+				.FirstOrDefaultAsync(o => o.OrdenCompraId == oferta.OrdenCompraEspejoId.Value);
+
+			if (ordenEspejo == null)
+				return;
+
+			ordenEspejo.CantidadOriginal = oferta.TotalRecibido + (oferta.CantidadPendiente * oferta.PrecioUnitario);
+			ordenEspejo.CantidadObtenida = oferta.TotalRecibido;
+			ordenEspejo.CantidadPendiente = oferta.CantidadPendiente * oferta.PrecioUnitario;
+			ordenEspejo.TotalComprometido = oferta.CantidadOriginal;
+			ordenEspejo.TotalEjecutado = oferta.CantidadVendida;
+			ordenEspejo.FechaActualizacion = DateTime.Now;
+
+			if (ordenEspejo.CantidadPendiente < 0)
+				ordenEspejo.CantidadPendiente = 0;
+
+			ordenEspejo.Estado = oferta.Estado;
+		}
     }
 }

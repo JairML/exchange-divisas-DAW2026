@@ -23,12 +23,20 @@ public class SessionAuthHandler : AuthenticationHandler<AuthenticationSchemeOpti
 
     protected override async Task<AuthenticateResult> HandleAuthenticateAsync()
     {
-        var authHeader = Request.Headers.Authorization.FirstOrDefault();
-        if (authHeader == null || !authHeader.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
-            return AuthenticateResult.NoResult();
+        string? token = null;
 
-        var token = authHeader["Bearer ".Length..].Trim();
-        if (string.IsNullOrEmpty(token))
+        var authHeader = Request.Headers.Authorization.FirstOrDefault();
+        if (!string.IsNullOrWhiteSpace(authHeader) &&
+            authHeader.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
+        {
+            token = authHeader["Bearer ".Length..].Trim();
+        }
+        else if (Request.Headers.TryGetValue("tokenSesion", out var tokenSesionHeader))
+        {
+            token = tokenSesionHeader.ToString().Trim();
+        }
+
+        if (string.IsNullOrWhiteSpace(token))
             return AuthenticateResult.NoResult();
 
         var sesion = await _context.SesionesUsuario
