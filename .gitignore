@@ -16,3 +16,8 @@ packages/
 *.jfm
 
 _ReSharper*/
+
+# Secrets / configuración local
+appsettings.json
+appsettings.*.json
+!appsettings.example.json

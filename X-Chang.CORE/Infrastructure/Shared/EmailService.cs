@@ -1,5 +1,6 @@
 using MailKit.Net.Smtp;
 using MailKit.Security;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using MimeKit;
 using X_Chang.CORE.Core.Entities;
@@ -11,10 +12,12 @@ namespace X_Chang.CORE.Infrastructure.Shared;
 public class EmailService : IEmailService
 {
     private readonly SmtpSettings _smtp;
+    private readonly ILogger<EmailService> _logger;
 
-    public EmailService(IOptions<SmtpSettings> smtp)
+    public EmailService(IOptions<SmtpSettings> smtp, ILogger<EmailService> logger)
     {
         _smtp = smtp.Value;
+        _logger = logger;
     }
 
     public async Task<bool> EnviarAsync(
@@ -23,6 +26,9 @@ public class EmailService : IEmailService
         string cuerpo,
         IEnumerable<AdjuntosCorreo>? adjuntos = null)
     {
+        _logger.LogInformation("Enviando email a {Destinatario} | Asunto: {Asunto} | SMTP: {Host}:{Puerto}",
+            destinatario, asunto, _smtp.Host, _smtp.Puerto);
+
         try
         {
             var mensaje = new MimeMessage();
@@ -38,15 +44,34 @@ public class EmailService : IEmailService
                 ? SecureSocketOptions.SslOnConnect
                 : SecureSocketOptions.StartTlsWhenAvailable;
 
+            _logger.LogDebug("Conectando a {Host}:{Puerto} (SSL: {UsarSsl})", _smtp.Host, _smtp.Puerto, _smtp.UsarSsl);
             await client.ConnectAsync(_smtp.Host, _smtp.Puerto, socketOptions);
+
+            _logger.LogDebug("Autenticando como {Usuario}", _smtp.Usuario);
             await client.AuthenticateAsync(_smtp.Usuario, _smtp.Password);
+
             await client.SendAsync(mensaje);
             await client.DisconnectAsync(quit: true);
 
+            _logger.LogInformation("Email enviado exitosamente a {Destinatario}", destinatario);
             return true;
         }
-        catch
+        catch (MailKit.Net.Smtp.SmtpCommandException ex)
         {
+            _logger.LogError(ex, "Error SMTP al enviar a {Destinatario} | Código: {StatusCode} | Mensaje: {Message}",
+                destinatario, ex.StatusCode, ex.Message);
+            return false;
+        }
+        catch (MailKit.Security.AuthenticationException ex)
+        {
+            _logger.LogError(ex, "Fallo de autenticación SMTP con usuario {Usuario} | Mensaje: {Message}",
+                _smtp.Usuario, ex.Message);
+            return false;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error inesperado al enviar email a {Destinatario} | {ExceptionType}: {Message}",
+                destinatario, ex.GetType().Name, ex.Message);
             return false;
         }
     }

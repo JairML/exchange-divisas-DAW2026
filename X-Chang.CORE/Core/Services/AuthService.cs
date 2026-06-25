@@ -13,15 +13,18 @@ public class AuthService : IAuthService
     private readonly IAuthRepository _authRepo;
     private readonly ISesionUsuarioRepository _sesionRepo;
     private readonly SessionSettings _settings;
+    private readonly IEmailService _emailService;
 
     public AuthService(
         IAuthRepository authRepo,
         ISesionUsuarioRepository sesionRepo,
-        IOptions<SessionSettings> settings)
+        IOptions<SessionSettings> settings,
+        IEmailService emailService)
     {
         _authRepo = authRepo;
         _sesionRepo = sesionRepo;
         _settings = settings.Value;
+        _emailService = emailService;
     }
 
     public async Task<AuthResponseDto> RegistrarAsync(RegisterRequestDto request)
@@ -54,6 +57,17 @@ public class AuthService : IAuthService
         });
 
         await _authRepo.CrearBilleteraAsync(new Billeteras { UsuarioId = usuario.UsuarioId, FechaCreacion = DateTime.UtcNow });
+
+        await _emailService.EnviarAsync(
+            usuario.CorreoElectronico,
+            "Bienvenido a X-Chang",
+            $"""
+            <h2>¡Bienvenido a X-Chang, {usuario.NombreUsuario}!</h2>
+            <p>Tu cuenta ha sido creada exitosamente. Ya puedes iniciar sesión y comenzar a operar en nuestra plataforma de intercambio de divisas.</p>
+            <p>Si tienes alguna consulta, no dudes en contactarnos.</p>
+            <br/>
+            <p>El equipo de X-Chang</p>
+            """);
 
         await _authRepo.RegistrarAccesoAsync(new AccesosUsuario
         {
