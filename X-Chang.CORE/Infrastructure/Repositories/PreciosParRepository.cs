@@ -17,11 +17,28 @@ namespace X_Chang.CORE.Infrastructure.Repositories
             _context = context;
         }
 
-        public async Task<List<Monedas>> ObtenerMonedasSoportadasAsync(IEnumerable<string> codigosIso)
+        public async Task<List<Monedas>> ObtenerMonedasSoportadasAsync(IEnumerable<string>? codigosIso = null)
         {
-            var codigos = codigosIso.ToList();
-            return await _context.Monedas
-                .Where(m => m.Activa && codigos.Contains(m.CodigoIso))
+            var query = _context.Monedas
+                .AsNoTracking()
+                .Where(m => m.Activa)
+                .AsQueryable();
+
+            if (codigosIso != null)
+            {
+                var codigos = codigosIso
+                    .Where(c => !string.IsNullOrWhiteSpace(c))
+                    .Select(c => c.Trim().ToUpper())
+                    .Distinct()
+                    .ToList();
+
+                if (codigos.Any())
+                {
+                    query = query.Where(m => codigos.Contains(m.CodigoIso));
+                }
+            }
+
+            return await query
                 .OrderBy(m => m.CodigoIso)
                 .ToListAsync();
         }
