@@ -8,26 +8,17 @@ namespace X_Chang.CORE.Core.Services
     {
         private readonly IPreciosParRepository _repo;
 
-        // Las 27 monedas soportadas, ordenadas alfabéticamente para generación de pares canónicos.
-        private static readonly string[] MonedasSoportadas =
-        {
-            "ARS", "AUD", "BOB", "BRL", "CAD", "CHF", "CLP", "CNY", "COP", "CRC",
-            "CUP", "DOP", "EUR", "GBP", "GTQ", "HKD", "HNL", "JPY", "MXN", "NIO",
-            "PAB", "PEN", "PYG", "RUB", "USD", "UYU", "VES"
-        };
-
         public PreciosParService(IPreciosParRepository repo)
         {
             _repo = repo;
         }
-
-        // ─── US-009 ──────────────────────────────────────────────────────────────
 
         public async Task<MenuPrincipalResponseDto> ObtenerDatosMenuPrincipalAsync(int? usuarioId)
         {
             if (usuarioId == null)
             {
                 var serie = await ObtenerSeriePorCodigos("USD", "EUR", null);
+
                 return new MenuPrincipalResponseDto
                 {
                     UsuarioAutenticado = false,
@@ -40,10 +31,11 @@ namespace X_Chang.CORE.Core.Services
                 };
             }
 
-            // Moneda principal según país de residencia
             var monedaPrincipal = await _repo.ObtenerMonedaPrincipalUsuarioAsync(usuarioId.Value) ?? "USD";
 
-            string origenPrincipal, destinoPrincipal;
+            string origenPrincipal;
+            string destinoPrincipal;
+
             if (monedaPrincipal != "USD")
             {
                 origenPrincipal = monedaPrincipal;
@@ -56,6 +48,7 @@ namespace X_Chang.CORE.Core.Services
             }
 
             var seriePrincipal = await ObtenerSeriePorCodigos(origenPrincipal, destinoPrincipal, null);
+
             var graficoPrincipal = new GraficoPreciosParDto
             {
                 MonedaOrigen = origenPrincipal,
@@ -63,13 +56,15 @@ namespace X_Chang.CORE.Core.Services
                 Serie = seriePrincipal
             };
 
-            // Segundo gráfico: par de la orden/oferta activa más reciente del usuario
             var parRecienteId = await _repo.ObtenerParMasRecienteActivoUsuarioAsync(usuarioId.Value);
 
-            string origenSecundario, destinoSecundario;
+            string origenSecundario;
+            string destinoSecundario;
+
             if (parRecienteId.HasValue)
             {
                 var isos = await _repo.ObtenerIsosPorParIdAsync(parRecienteId.Value);
+
                 if (isos.HasValue)
                 {
                     origenSecundario = isos.Value.OrigenIso;
@@ -77,19 +72,18 @@ namespace X_Chang.CORE.Core.Services
                 }
                 else
                 {
-                    // Fallback: primer par invertido
                     origenSecundario = destinoPrincipal;
                     destinoSecundario = origenPrincipal;
                 }
             }
             else
             {
-                // Sin órdenes/ofertas activas → mismo par del primero pero invertido
                 origenSecundario = destinoPrincipal;
                 destinoSecundario = origenPrincipal;
             }
 
             var serieSecundaria = await ObtenerSeriePorCodigos(origenSecundario, destinoSecundario, null);
+
             var graficoSecundario = new GraficoPreciosParDto
             {
                 MonedaOrigen = origenSecundario,
@@ -105,16 +99,18 @@ namespace X_Chang.CORE.Core.Services
             };
         }
 
-        // ─── US-010 ──────────────────────────────────────────────────────────────
-
         public async Task<ParesMonedaPaginadoDto> ObtenerListadoParesAsync(
-            int? usuarioId, FiltroParesMonedaDto filtro)
+    int? usuarioId,
+    FiltroParesMonedaDto filtro)
         {
-            // Datos de referencia desde la BD
-            var monedas = await _repo.ObtenerMonedasSoportadasAsync(MonedasSoportadas);
-            var monedasPorIso = monedas.ToDictionary(m => m.CodigoIso, m => m.MonedaId);
+            var monedas = await _repo.ObtenerMonedasSoportadasAsync();
+
+            var monedasPorIso = monedas.ToDictionary(
+                m => m.CodigoIso,
+                m => m.MonedaId);
 
             var pares = await _repo.ObtenerTodosParesAsync();
+
             var paresPorIds = pares.ToDictionary(
                 p => (p.MonedaOrigenId, p.MonedaDestinoId),
                 p => p.ParMonedaId);
@@ -123,46 +119,55 @@ namespace X_Chang.CORE.Core.Services
             var preciosVenta = await _repo.ObtenerMenoresPreciosVentaAsync();
 
             Dictionary<int, decimal>? volumenes = null;
+
             if (filtro.Criterio == "Volumen")
                 volumenes = await _repo.ObtenerVolumenesPorParAsync();
 
             Dictionary<int, DateTime>? transacciones = null;
+
             if (filtro.Criterio == "FechaReciente" && usuarioId.HasValue)
                 transacciones = await _repo.ObtenerFechaTransaccionPorParUsuarioAsync(usuarioId.Value);
 
-            // Códigos presentes en la BD (subconjunto de los 27 soportados)
-            var codesDisponibles = MonedasSoportadas
-                .Where(iso => monedasPorIso.ContainsKey(iso))
-                .ToArray(); // ya ordenado alfabéticamente
+            var codesDisponibles = monedas
+                .Select(m => m.CodigoIso)
+                .OrderBy(iso => iso)
+                .ToArray();
 
-            // Construir universo de pares
             var todos = filtro.ColapsarParesInversos
                 ? BuildPares351(codesDisponibles, monedasPorIso, paresPorIds, preciosCompra, preciosVenta)
                 : BuildPares702(codesDisponibles, monedasPorIso, paresPorIds, preciosCompra, preciosVenta);
 
-            // Filtrar
-            if (filtro.MonedaEntrega != "Cualquiera")
-                todos = todos.Where(p => p.MonedaEntrega == filtro.MonedaEntrega).ToList();
+            if (!string.IsNullOrWhiteSpace(filtro.MonedaEntrega) &&
+                filtro.MonedaEntrega != "Cualquiera")
+            {
+                todos = todos
+                    .Where(p => p.MonedaEntrega == filtro.MonedaEntrega)
+                    .ToList();
+            }
 
-            if (filtro.MonedaObtiene != "Cualquiera")
-                todos = todos.Where(p => p.MonedaObtiene == filtro.MonedaObtiene).ToList();
+            if (!string.IsNullOrWhiteSpace(filtro.MonedaObtiene) &&
+                filtro.MonedaObtiene != "Cualquiera")
+            {
+                todos = todos
+                    .Where(p => p.MonedaObtiene == filtro.MonedaObtiene)
+                    .ToList();
+            }
 
-            // Ordenar
             todos = Ordenar(todos, filtro, monedasPorIso, paresPorIds, volumenes, transacciones);
 
-            // Paginar
             var totalRegistros = todos.Count;
-            int regPorPag;
+
+            int registrosPorPagina;
             bool esTodos;
 
             if (string.Equals(filtro.RegistrosPorPagina, "Todos", StringComparison.OrdinalIgnoreCase))
             {
-                regPorPag = totalRegistros == 0 ? 1 : totalRegistros;
+                registrosPorPagina = totalRegistros == 0 ? 1 : totalRegistros;
                 esTodos = true;
             }
-            else if (!int.TryParse(filtro.RegistrosPorPagina, out regPorPag) || regPorPag <= 0)
+            else if (!int.TryParse(filtro.RegistrosPorPagina, out registrosPorPagina) || registrosPorPagina <= 0)
             {
-                regPorPag = 20;
+                registrosPorPagina = 20;
                 esTodos = false;
             }
             else
@@ -170,13 +175,19 @@ namespace X_Chang.CORE.Core.Services
                 esTodos = false;
             }
 
-            var totalPaginas = (int)Math.Ceiling(totalRegistros / (decimal)regPorPag);
-            if (totalPaginas < 1) totalPaginas = 1;
+            var totalPaginas = (int)Math.Ceiling(totalRegistros / (decimal)registrosPorPagina);
+
+            if (totalPaginas < 1)
+                totalPaginas = 1;
 
             var pagina = Math.Clamp(filtro.Pagina, 1, totalPaginas);
+
             var registros = esTodos
                 ? todos
-                : todos.Skip((pagina - 1) * regPorPag).Take(regPorPag).ToList();
+                : todos
+                    .Skip((pagina - 1) * registrosPorPagina)
+                    .Take(registrosPorPagina)
+                    .ToList();
 
             return new ParesMonedaPaginadoDto
             {
@@ -190,39 +201,50 @@ namespace X_Chang.CORE.Core.Services
             };
         }
 
-        // ─── US-011 ──────────────────────────────────────────────────────────────
-
         public async Task<ResultadoOperacion<SerieHistoricaParResponseDto>> ObtenerSerieHistoricaAsync(
-            string monedaOrigen, string monedaDestino, string rango)
+            string monedaOrigen,
+            string monedaDestino,
+            string rango)
         {
             var origenUpper = monedaOrigen.ToUpperInvariant();
             var destinoUpper = monedaDestino.ToUpperInvariant();
 
             if (origenUpper == destinoUpper)
+            {
                 return ResultadoOperacion<SerieHistoricaParResponseDto>.Error(
                     "Las monedas de origen y destino deben ser distintas.");
+            }
 
             var monedas = await _repo.ObtenerMonedasSoportadasAsync(new[] { origenUpper, destinoUpper });
+
             var origen = monedas.FirstOrDefault(m => m.CodigoIso == origenUpper);
             var destino = monedas.FirstOrDefault(m => m.CodigoIso == destinoUpper);
 
             if (origen == null || destino == null)
+            {
                 return ResultadoOperacion<SerieHistoricaParResponseDto>.Error(
                     "Moneda no reconocida o no soportada.");
+            }
 
             var parId = await _repo.ObtenerParMonedaIdAsync(origen.MonedaId, destino.MonedaId);
 
-            // Precios actuales del order book vivo
             var preciosCompra = await _repo.ObtenerMayoresPreciosCompraAsync();
             var preciosVenta = await _repo.ObtenerMenoresPreciosVentaAsync();
 
-            decimal? mayorActual = parId.HasValue && preciosCompra.TryGetValue(parId.Value, out var pc) ? pc : null;
-            decimal? menorActual = parId.HasValue && preciosVenta.TryGetValue(parId.Value, out var pv) ? pv : null;
+            decimal? mayorActual = parId.HasValue && preciosCompra.TryGetValue(parId.Value, out var pc)
+                ? pc
+                : null;
+
+            decimal? menorActual = parId.HasValue && preciosVenta.TryGetValue(parId.Value, out var pv)
+                ? pv
+                : null;
+
             decimal? margenActual = mayorActual.HasValue && menorActual.HasValue
                 ? mayorActual.Value - menorActual.Value
                 : null;
 
             var desde = ComputarDesde(rango);
+
             var serie = parId.HasValue
                 ? await _repo.ObtenerSerieHistoricaAsync(parId.Value, desde)
                 : new List<PuntoSerieHistoricaDto>();
@@ -239,12 +261,13 @@ namespace X_Chang.CORE.Core.Services
             });
         }
 
-        // ─── Helpers privados ────────────────────────────────────────────────────
-
         private async Task<List<PuntoSerieHistoricaDto>> ObtenerSeriePorCodigos(
-            string origenIso, string destinoIso, DateTime? desde)
+            string origenIso,
+            string destinoIso,
+            DateTime? desde)
         {
             var monedas = await _repo.ObtenerMonedasSoportadasAsync(new[] { origenIso, destinoIso });
+
             var origen = monedas.FirstOrDefault(m => m.CodigoIso == origenIso);
             var destino = monedas.FirstOrDefault(m => m.CodigoIso == destinoIso);
 
@@ -252,6 +275,7 @@ namespace X_Chang.CORE.Core.Services
                 return new List<PuntoSerieHistoricaDto>();
 
             var parId = await _repo.ObtenerParMonedaIdAsync(origen.MonedaId, destino.MonedaId);
+
             if (!parId.HasValue)
                 return new List<PuntoSerieHistoricaDto>();
 
@@ -266,12 +290,24 @@ namespace X_Chang.CORE.Core.Services
             Dictionary<int, decimal> preciosVenta)
         {
             var result = new List<ParMonedaListadoDto>(codes.Length * (codes.Length - 1));
+
             foreach (var origen in codes)
+            {
                 foreach (var destino in codes)
                 {
-                    if (origen == destino) continue;
-                    result.Add(BuildDto(origen, destino, monedasPorIso, paresPorIds, preciosCompra, preciosVenta));
+                    if (origen == destino)
+                        continue;
+
+                    result.Add(BuildDto(
+                        origen,
+                        destino,
+                        monedasPorIso,
+                        paresPorIds,
+                        preciosCompra,
+                        preciosVenta));
                 }
+            }
+
             return result;
         }
 
@@ -283,30 +319,42 @@ namespace X_Chang.CORE.Core.Services
             Dictionary<int, decimal> preciosVenta)
         {
             var result = new List<ParMonedaListadoDto>(codes.Length * (codes.Length - 1) / 2);
-            for (int i = 0; i < codes.Length; i++)
+
+            for (var i = 0; i < codes.Length; i++)
             {
-                for (int j = i + 1; j < codes.Length; j++)
+                for (var j = i + 1; j < codes.Length; j++)
                 {
-                    // Forma canónica: codes[i] < codes[j] (ya ordenado)
                     var a = codes[i];
                     var b = codes[j];
 
-                    // Precios del par canónico (a→b), con fallback al inverso (b→a)
-                    decimal? mayorCompra = null, menorVenta = null;
+                    decimal? mayorCompra = null;
+                    decimal? menorVenta = null;
+                    var parIdValue = 0;
 
-                    if (monedasPorIso.TryGetValue(a, out var aId) && monedasPorIso.TryGetValue(b, out var bId))
+                    if (monedasPorIso.TryGetValue(a, out var aId) &&
+                        monedasPorIso.TryGetValue(b, out var bId))
                     {
                         if (paresPorIds.TryGetValue((aId, bId), out var parAb))
                         {
-                            if (preciosCompra.TryGetValue(parAb, out var cAb)) mayorCompra = cAb;
-                            if (preciosVenta.TryGetValue(parAb, out var vAb)) menorVenta = vAb;
+                            parIdValue = parAb;
+
+                            if (preciosCompra.TryGetValue(parAb, out var cAb))
+                                mayorCompra = cAb;
+
+                            if (preciosVenta.TryGetValue(parAb, out var vAb))
+                                menorVenta = vAb;
                         }
 
-                        if (mayorCompra == null && menorVenta == null &&
+                        if ((mayorCompra == null && menorVenta == null) &&
                             paresPorIds.TryGetValue((bId, aId), out var parBa))
                         {
-                            if (preciosCompra.TryGetValue(parBa, out var cBa)) mayorCompra = cBa;
-                            if (preciosVenta.TryGetValue(parBa, out var vBa)) menorVenta = vBa;
+                            parIdValue = parBa;
+
+                            if (preciosCompra.TryGetValue(parBa, out var cBa))
+                                mayorCompra = cBa;
+
+                            if (preciosVenta.TryGetValue(parBa, out var vBa))
+                                menorVenta = vBa;
                         }
                     }
 
@@ -316,6 +364,7 @@ namespace X_Chang.CORE.Core.Services
 
                     result.Add(new ParMonedaListadoDto
                     {
+                        ParMonedaId = parIdValue,
                         MonedaEntrega = a,
                         MonedaObtiene = b,
                         MayorPrecioCompra = mayorCompra,
@@ -324,24 +373,33 @@ namespace X_Chang.CORE.Core.Services
                     });
                 }
             }
+
             return result;
         }
 
         private static ParMonedaListadoDto BuildDto(
-            string origen, string destino,
+            string origen,
+            string destino,
             Dictionary<string, int> monedasPorIso,
             Dictionary<(int, int), int> paresPorIds,
             Dictionary<int, decimal> preciosCompra,
             Dictionary<int, decimal> preciosVenta)
         {
-            decimal? mayorCompra = null, menorVenta = null;
+            decimal? mayorCompra = null;
+            decimal? menorVenta = null;
+            var parIdValue = 0;
 
             if (monedasPorIso.TryGetValue(origen, out var origenId) &&
                 monedasPorIso.TryGetValue(destino, out var destinoId) &&
                 paresPorIds.TryGetValue((origenId, destinoId), out var parId))
             {
-                if (preciosCompra.TryGetValue(parId, out var c)) mayorCompra = c;
-                if (preciosVenta.TryGetValue(parId, out var v)) menorVenta = v;
+                parIdValue = parId;
+
+                if (preciosCompra.TryGetValue(parId, out var c))
+                    mayorCompra = c;
+
+                if (preciosVenta.TryGetValue(parId, out var v))
+                    menorVenta = v;
             }
 
             decimal? margen = mayorCompra.HasValue && menorVenta.HasValue
@@ -350,6 +408,7 @@ namespace X_Chang.CORE.Core.Services
 
             return new ParMonedaListadoDto
             {
+                ParMonedaId = parIdValue,
                 MonedaEntrega = origen,
                 MonedaObtiene = destino,
                 MayorPrecioCompra = mayorCompra,
@@ -366,54 +425,86 @@ namespace X_Chang.CORE.Core.Services
             Dictionary<int, decimal>? volumenes,
             Dictionary<int, DateTime>? transacciones)
         {
-            bool desc = filtro.Direccion == "desc";
-            bool collapsed = filtro.ColapsarParesInversos;
+            var desc = filtro.Direccion == "desc";
+            var collapsed = filtro.ColapsarParesInversos;
 
             switch (filtro.Criterio)
             {
                 case "FechaReciente":
-                    return OrdenarPorFechaReciente(lista, desc, collapsed, monedasPorIso, paresPorIds, transacciones);
+                    return OrdenarPorFechaReciente(
+                        lista,
+                        desc,
+                        collapsed,
+                        monedasPorIso,
+                        paresPorIds,
+                        transacciones);
 
                 case "Volumen":
                     var volPorPar = lista
                         .Select(p => (p, vol: GetVolumen(p, collapsed, monedasPorIso, paresPorIds, volumenes)))
                         .ToList();
+
                     return desc
-                        ? volPorPar.OrderByDescending(x => x.vol)
-                                   .ThenBy(x => x.p.MonedaEntrega).ThenBy(x => x.p.MonedaObtiene)
-                                   .Select(x => x.p).ToList()
-                        : volPorPar.OrderBy(x => x.vol)
-                                   .ThenBy(x => x.p.MonedaEntrega).ThenBy(x => x.p.MonedaObtiene)
-                                   .Select(x => x.p).ToList();
+                        ? volPorPar
+                            .OrderByDescending(x => x.vol)
+                            .ThenBy(x => x.p.MonedaEntrega)
+                            .ThenBy(x => x.p.MonedaObtiene)
+                            .Select(x => x.p)
+                            .ToList()
+                        : volPorPar
+                            .OrderBy(x => x.vol)
+                            .ThenBy(x => x.p.MonedaEntrega)
+                            .ThenBy(x => x.p.MonedaObtiene)
+                            .Select(x => x.p)
+                            .ToList();
 
                 case "MayorPrecioCompra":
                     return desc
-                        ? lista.OrderByDescending(p => p.MayorPrecioCompra ?? decimal.MinValue)
-                               .ThenBy(p => p.MonedaEntrega).ThenBy(p => p.MonedaObtiene).ToList()
-                        : lista.OrderBy(p => p.MayorPrecioCompra ?? decimal.MaxValue)
-                               .ThenBy(p => p.MonedaEntrega).ThenBy(p => p.MonedaObtiene).ToList();
+                        ? lista
+                            .OrderByDescending(p => p.MayorPrecioCompra ?? decimal.MinValue)
+                            .ThenBy(p => p.MonedaEntrega)
+                            .ThenBy(p => p.MonedaObtiene)
+                            .ToList()
+                        : lista
+                            .OrderBy(p => p.MayorPrecioCompra ?? decimal.MaxValue)
+                            .ThenBy(p => p.MonedaEntrega)
+                            .ThenBy(p => p.MonedaObtiene)
+                            .ToList();
 
                 case "MenorPrecioVenta":
                     return desc
-                        ? lista.OrderByDescending(p => p.MenorPrecioVenta ?? decimal.MinValue)
-                               .ThenBy(p => p.MonedaEntrega).ThenBy(p => p.MonedaObtiene).ToList()
-                        : lista.OrderBy(p => p.MenorPrecioVenta ?? decimal.MaxValue)
-                               .ThenBy(p => p.MonedaEntrega).ThenBy(p => p.MonedaObtiene).ToList();
+                        ? lista
+                            .OrderByDescending(p => p.MenorPrecioVenta ?? decimal.MinValue)
+                            .ThenBy(p => p.MonedaEntrega)
+                            .ThenBy(p => p.MonedaObtiene)
+                            .ToList()
+                        : lista
+                            .OrderBy(p => p.MenorPrecioVenta ?? decimal.MaxValue)
+                            .ThenBy(p => p.MonedaEntrega)
+                            .ThenBy(p => p.MonedaObtiene)
+                            .ToList();
 
                 case "Margen":
                     return desc
-                        ? lista.OrderByDescending(p => p.Margen ?? decimal.MinValue)
-                               .ThenBy(p => p.MonedaEntrega).ThenBy(p => p.MonedaObtiene).ToList()
-                        : lista.OrderBy(p => p.Margen ?? decimal.MaxValue)
-                               .ThenBy(p => p.MonedaEntrega).ThenBy(p => p.MonedaObtiene).ToList();
+                        ? lista
+                            .OrderByDescending(p => p.Margen ?? decimal.MinValue)
+                            .ThenBy(p => p.MonedaEntrega)
+                            .ThenBy(p => p.MonedaObtiene)
+                            .ToList()
+                        : lista
+                            .OrderBy(p => p.Margen ?? decimal.MaxValue)
+                            .ThenBy(p => p.MonedaEntrega)
+                            .ThenBy(p => p.MonedaObtiene)
+                            .ToList();
 
                 default:
-                    return lista.OrderBy(p => p.MonedaEntrega).ThenBy(p => p.MonedaObtiene).ToList();
+                    return lista
+                        .OrderBy(p => p.MonedaEntrega)
+                        .ThenBy(p => p.MonedaObtiene)
+                        .ToList();
             }
         }
 
-        // Los pares del usuario SIEMPRE van primero (asc o desc solo afecta al orden interno
-        // de ese grupo); el resto se ordena siempre alfabético.
         private static List<ParMonedaListadoDto> OrdenarPorFechaReciente(
             List<ParMonedaListadoDto> lista,
             bool desc,
@@ -423,25 +514,46 @@ namespace X_Chang.CORE.Core.Services
             Dictionary<int, DateTime>? transacciones)
         {
             if (transacciones == null || transacciones.Count == 0)
-                return lista.OrderBy(p => p.MonedaEntrega).ThenBy(p => p.MonedaObtiene).ToList();
+            {
+                return lista
+                    .OrderBy(p => p.MonedaEntrega)
+                    .ThenBy(p => p.MonedaObtiene)
+                    .ToList();
+            }
 
-            // Precomputa la fecha máxima por par (teniendo en cuenta el par inverso si collapsed)
             var conFecha = lista
-                .Select(p => (par: p, fecha: GetFechaTransaccion(p, collapsed, monedasPorIso, paresPorIds, transacciones)))
+                .Select(p => (par: p, fecha: GetFechaTransaccion(
+                    p,
+                    collapsed,
+                    monedasPorIso,
+                    paresPorIds,
+                    transacciones)))
                 .ToList();
 
-            var delUsuario = conFecha.Where(x => x.fecha.HasValue).ToList();
-            var restantes = conFecha.Where(x => !x.fecha.HasValue)
+            var delUsuario = conFecha
+                .Where(x => x.fecha.HasValue)
+                .ToList();
+
+            var restantes = conFecha
+                .Where(x => !x.fecha.HasValue)
                 .OrderBy(x => x.par.MonedaEntrega)
                 .ThenBy(x => x.par.MonedaObtiene)
                 .Select(x => x.par)
                 .ToList();
 
             var sortedUsuario = desc
-                ? delUsuario.OrderByDescending(x => x.fecha!.Value).Select(x => x.par).ToList()
-                : delUsuario.OrderBy(x => x.fecha!.Value).Select(x => x.par).ToList();
+                ? delUsuario
+                    .OrderByDescending(x => x.fecha!.Value)
+                    .Select(x => x.par)
+                    .ToList()
+                : delUsuario
+                    .OrderBy(x => x.fecha!.Value)
+                    .Select(x => x.par)
+                    .ToList();
 
-            return sortedUsuario.Concat(restantes).ToList();
+            return sortedUsuario
+                .Concat(restantes)
+                .ToList();
         }
 
         private static DateTime? GetFechaTransaccion(
@@ -453,15 +565,18 @@ namespace X_Chang.CORE.Core.Services
         {
             if (!monedasPorIso.TryGetValue(par.MonedaEntrega, out var origenId) ||
                 !monedasPorIso.TryGetValue(par.MonedaObtiene, out var destinoId))
+            {
                 return null;
+            }
 
             DateTime? resultado = null;
 
             if (paresPorIds.TryGetValue((origenId, destinoId), out var parId) &&
                 transacciones.TryGetValue(parId, out var fecha))
+            {
                 resultado = fecha;
+            }
 
-            // Para pares colapsados también revisar la dirección inversa
             if (collapsed &&
                 paresPorIds.TryGetValue((destinoId, origenId), out var parInvId) &&
                 transacciones.TryGetValue(parInvId, out var fechaInv))
@@ -480,7 +595,8 @@ namespace X_Chang.CORE.Core.Services
             Dictionary<(int, int), int> paresPorIds,
             Dictionary<int, decimal>? volumenes)
         {
-            if (volumenes == null) return 0m;
+            if (volumenes == null)
+                return 0m;
 
             decimal vol = 0m;
 
@@ -489,25 +605,32 @@ namespace X_Chang.CORE.Core.Services
             {
                 if (paresPorIds.TryGetValue((origenId, destinoId), out var parId) &&
                     volumenes.TryGetValue(parId, out var v))
+                {
                     vol += v;
+                }
 
                 if (collapsed &&
                     paresPorIds.TryGetValue((destinoId, origenId), out var parInvId) &&
                     volumenes.TryGetValue(parInvId, out var vInv))
+                {
                     vol += vInv;
+                }
             }
 
             return vol;
         }
 
-        private static DateTime? ComputarDesde(string rango) => rango switch
+        private static DateTime? ComputarDesde(string rango)
         {
-            "UltimoDia"    => DateTime.UtcNow.AddDays(-1),
-            "UltimaSemana" => DateTime.UtcNow.AddDays(-7),
-            "UltimoMes"    => DateTime.UtcNow.AddMonths(-1),
-            "UltimoAno"    => DateTime.UtcNow.AddYears(-1),
-            "Total"        => null,
-            _              => DateTime.UtcNow.AddDays(-1)   // default: último día
-        };
+            return rango switch
+            {
+                "UltimoDia" => DateTime.UtcNow.AddDays(-1),
+                "UltimaSemana" => DateTime.UtcNow.AddDays(-7),
+                "UltimoMes" => DateTime.UtcNow.AddMonths(-1),
+                "UltimoAno" => DateTime.UtcNow.AddYears(-1),
+                "Total" => null,
+                _ => DateTime.UtcNow.AddDays(-1)
+            };
+        }
     }
 }
