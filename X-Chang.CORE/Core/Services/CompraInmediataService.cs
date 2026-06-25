@@ -95,27 +95,34 @@ namespace X_Chang.CORE.Core.Services
                 cantidadAEjecutar);
         }
 
-        public Task<TiempoEstimadoBusquedaRutaDto> ObtenerTiempoEstimadoBusquedaRutaAsync(
+        public async Task<TiempoEstimadoBusquedaRutaDto> ObtenerTiempoEstimadoBusquedaRutaAsync(
             int cantidadMaximaSaltos)
         {
             ValidarCantidadSaltos(cantidadMaximaSaltos);
 
-            var tiempoEstimadoMs = cantidadMaximaSaltos switch
-            {
-                1 => 300,
-                2 => 800,
-                3 => 1500,
-                4 => 2500,
-                5 => 4000,
-                _ => 4000
-            };
+            var paresActivos = await _compraRepository.ObtenerParesActivosAsync();
 
-            return Task.FromResult(new TiempoEstimadoBusquedaRutaDto
+            var cantidadMonedas = paresActivos
+                .Select(p => p.MonedaOrigenId)
+                .Concat(paresActivos.Select(p => p.MonedaDestinoId))
+                .Distinct()
+                .Count();
+
+            var rutasEstimadas = CalcularRutasEstimadas(cantidadMonedas, cantidadMaximaSaltos);
+            var tiempoEstimadoSegundos = CalcularTiempoEstimadoSegundos(rutasEstimadas);
+            var tiempoEstimadoMs = (int)Math.Ceiling(tiempoEstimadoSegundos * 1000m);
+            var tiempoTexto = FormatearTiempo(tiempoEstimadoSegundos);
+
+            return new TiempoEstimadoBusquedaRutaDto
             {
                 CantidadMaximaSaltos = cantidadMaximaSaltos,
+                CantidadMonedas = cantidadMonedas,
+                RutasEstimadas = rutasEstimadas,
                 TiempoEstimadoMs = tiempoEstimadoMs,
-                Mensaje = $"La búsqueda demorará aproximadamente {tiempoEstimadoMs} ms."
-            });
+                TiempoEstimadoSegundos = Math.Round(tiempoEstimadoSegundos, 2),
+                TiempoEstimadoTexto = tiempoTexto,
+                Mensaje = $"La búsqueda puede tardar aproximadamente {tiempoTexto} porque evaluará {rutasEstimadas:N0} rutas posibles."
+            };
         }
 
         public async Task<ResultadoBusquedaRutaCompraDto> BuscarMejorRutaAsync(
@@ -435,6 +442,62 @@ namespace X_Chang.CORE.Core.Services
                 return string.Empty;
 
             return moneda.CodigoIso;
+        }
+        private static long CalcularRutasEstimadas(int cantidadMonedas, int saltos)
+        {
+            if (cantidadMonedas < 2)
+                return 0;
+
+            if (saltos < 1)
+                return 0;
+
+            var monedasIntermedias = cantidadMonedas - 2;
+            long total = 0;
+
+            for (var k = 1; k <= saltos; k++)
+            {
+                var intermediasNecesarias = k - 1;
+
+                if (intermediasNecesarias > monedasIntermedias)
+                    break;
+
+                long permutaciones = 1;
+
+                for (var i = 0; i < intermediasNecesarias; i++)
+                {
+                    permutaciones *= monedasIntermedias - i;
+                }
+
+                total += permutaciones;
+            }
+
+            return total;
+        }
+
+        private static decimal CalcularTiempoEstimadoSegundos(long rutasEstimadas)
+        {
+            const decimal segundosPorRuta = 0.001m;
+
+            if (rutasEstimadas <= 0)
+                return 0;
+
+            var estimado = rutasEstimadas * segundosPorRuta;
+
+            return Math.Max(0.1m, estimado);
+        }
+
+        private static string FormatearTiempo(decimal segundos)
+        {
+            if (segundos < 1)
+                return "menos de 1 segundo";
+
+            if (segundos < 60)
+                return $"{Math.Ceiling(segundos)} segundos";
+
+            var minutos = Math.Floor(segundos / 60);
+            var segundosRestantes = Math.Ceiling(segundos % 60);
+
+            return $"{minutos} min {segundosRestantes} s";
         }
     }
 }
