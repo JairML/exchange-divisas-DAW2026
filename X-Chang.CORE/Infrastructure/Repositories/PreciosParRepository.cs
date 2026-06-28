@@ -53,20 +53,58 @@ namespace X_Chang.CORE.Infrastructure.Repositories
 
         public async Task<Dictionary<int, decimal>> ObtenerMayoresPreciosCompraAsync()
         {
-            return await _context.OrdenesCompra
+            var desdeOrdenes = await _context.OrdenesCompra
                 .Where(o => EstadosActivos.Contains(o.Estado))
                 .GroupBy(o => o.ParMonedaId)
                 .Select(g => new { g.Key, Max = g.Max(o => o.PrecioUnitario) })
                 .ToDictionaryAsync(x => x.Key, x => x.Max);
+
+            var desdeHistorico = await _context.HistoricoPreciosPar
+                .GroupBy(h => h.ParMonedaId)
+                .Select(g => new
+                {
+                    ParMonedaId = g.Key,
+                    MayorPrecioCompra = g.OrderByDescending(h => h.FechaRegistro)
+                                         .Select(h => h.MayorPrecioCompra)
+                                         .FirstOrDefault()
+                })
+                .ToDictionaryAsync(x => x.ParMonedaId, x => x.MayorPrecioCompra ?? 0m);
+
+            foreach (var (parId, precio) in desdeHistorico)
+            {
+                if (!desdeOrdenes.ContainsKey(parId))
+                    desdeOrdenes[parId] = precio;
+            }
+
+            return desdeOrdenes;
         }
 
         public async Task<Dictionary<int, decimal>> ObtenerMenoresPreciosVentaAsync()
         {
-            return await _context.OfertasVenta
+            var desdeOfertas = await _context.OfertasVenta
                 .Where(o => EstadosActivos.Contains(o.Estado))
                 .GroupBy(o => o.ParMonedaId)
                 .Select(g => new { g.Key, Min = g.Min(o => o.PrecioUnitario) })
                 .ToDictionaryAsync(x => x.Key, x => x.Min);
+
+            var desdeHistorico = await _context.HistoricoPreciosPar
+                .GroupBy(h => h.ParMonedaId)
+                .Select(g => new
+                {
+                    ParMonedaId = g.Key,
+                    MenorPrecioVenta = g.OrderByDescending(h => h.FechaRegistro)
+                                        .Select(h => h.MenorPrecioVenta)
+                                        .FirstOrDefault()
+                })
+                .ToDictionaryAsync(x => x.ParMonedaId, x => x.MenorPrecioVenta ?? 0m);
+
+            foreach (var (parId, precio) in desdeHistorico)
+            {
+                if (!desdeOfertas.ContainsKey(parId))
+                    desdeOfertas[parId] = precio;
+            }
+
+            return desdeOfertas;
         }
 
         public async Task<Dictionary<int, decimal>> ObtenerVolumenesPorParAsync()
