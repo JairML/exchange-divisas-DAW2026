@@ -10,4 +10,7 @@ public record RegisterRequestDto(
         ErrorMessage = "La contraseña debe contener una mayúscula, un número y un carácter especial")]
     string Password,
     [Required][StringLength(50, MinimumLength = 8)] string ConfirmarPassword,
-    [Required][Range(1, int.MaxValue, ErrorMessage = "Seleccione un país")] int PaisId);
+    [Required][Range(1, int.MaxValue, ErrorMessage = "Seleccione un país")] int PaisId,
+    [Required][StringLength(20, MinimumLength = 6)] string Telefono,
+    [Required][StringLength(30, MinimumLength = 2)] string TipoDocumento,
+    [Required][StringLength(20, MinimumLength = 5)] string NumeroDocumento);

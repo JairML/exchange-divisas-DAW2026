@@ -654,6 +654,82 @@ namespace X_Chang.CORE.Infrastructure.Repositories
                 .Distinct()
                 .CountAsync();
 
+            var distribucionPorTipo = await _context.HistorialTransacciones
+                .Where(h => h.FechaHora >= desde && h.FechaHora < hastaExclusivo)
+                .GroupBy(h => h.TipoOperacion)
+                .Select(g => new DistribucionTipoOperacionDto
+                {
+                    TipoOperacion = g.Key,
+                    Cantidad = g.Count()
+                })
+                .OrderByDescending(x => x.Cantidad)
+                .ToListAsync();
+
+            var monedas = await _context.Monedas
+                .Where(m => m.Activa)
+                .Select(m => new MonedaResumenAdminDto
+                {
+                    MonedaId = m.MonedaId,
+                    CodigoMoneda = m.CodigoIso,
+                    VolumenOperado = _context.EjecucionesOrden
+                        .Where(e => e.ParMoneda.MonedaOrigenId == m.MonedaId
+                            && e.FechaEjecucion >= desde && e.FechaEjecucion < hastaExclusivo)
+                        .Sum(e => (decimal?)e.TotalOperacion) ?? 0m,
+                    CantidadOperaciones = _context.EjecucionesOrden
+                        .Count(e => (e.ParMoneda.MonedaOrigenId == m.MonedaId || e.ParMoneda.MonedaDestinoId == m.MonedaId)
+                            && e.FechaEjecucion >= desde && e.FechaEjecucion < hastaExclusivo),
+                    CantidadComprada = _context.EjecucionesOrden
+                        .Where(e => e.ParMoneda.MonedaDestinoId == m.MonedaId
+                            && e.FechaEjecucion >= desde && e.FechaEjecucion < hastaExclusivo)
+                        .Sum(e => (decimal?)e.CantidadEjecutada) ?? 0m,
+                    CantidadVendida = _context.EjecucionesOrden
+                        .Where(e => e.ParMoneda.MonedaOrigenId == m.MonedaId
+                            && e.FechaEjecucion >= desde && e.FechaEjecucion < hastaExclusivo)
+                        .Sum(e => (decimal?)e.TotalOperacion) ?? 0m,
+                    TotalDepositado = _context.Depositos
+                        .Where(d => d.MonedaId == m.MonedaId && d.Estado == "Completada"
+                            && d.FechaDeposito >= desde && d.FechaDeposito < hastaExclusivo)
+                        .Sum(d => (decimal?)d.MontoDepositado) ?? 0m,
+                    TotalRetirado = _context.Retiros
+                        .Where(r => r.MonedaId == m.MonedaId && r.Estado == "Completada"
+                            && r.FechaRetiro >= desde && r.FechaRetiro < hastaExclusivo)
+                        .Sum(r => (decimal?)r.MontoRetirado) ?? 0m
+                })
+                .Where(x => x.VolumenOperado > 0 || x.CantidadOperaciones > 0 || x.TotalDepositado > 0 || x.TotalRetirado > 0)
+                .OrderByDescending(x => x.VolumenOperado)
+                .ToListAsync();
+
+            var mejoresRutas = await _context.RutasConversion
+                .Include(r => r.MonedaInicial)
+                .Include(r => r.MonedaFinal)
+                .Include(r => r.RutaConversionSaltos).ThenInclude(s => s.MonedaOrigen)
+                .Include(r => r.RutaConversionSaltos).ThenInclude(s => s.MonedaDestino)
+                .Where(r => r.FechaCreacion >= desde && r.FechaCreacion < hastaExclusivo)
+                .OrderByDescending(r => r.FechaCreacion)
+                .Take(50)
+                .Select(r => new MejorRutaAdminDto
+                {
+                    FechaCreacion = r.FechaCreacion,
+                    MonedaInicial = r.MonedaInicial.CodigoIso,
+                    MonedaFinal = r.MonedaFinal.CodigoIso,
+                    CantidadSaltos = r.CantidadSaltos,
+                    AhorroEstimado = r.AhorroEstimado,
+                    GananciaEstimada = r.GananciaEstimada,
+                    Saltos = r.RutaConversionSaltos
+                        .OrderBy(s => s.NumeroSalto)
+                        .Select(s => new SaltoMejorRutaAdminDto
+                        {
+                            NumeroSalto = s.NumeroSalto,
+                            Par = s.MonedaOrigen.CodigoIso + "/" + s.MonedaDestino.CodigoIso,
+                            CantidadConvertida = s.CantidadConvertida,
+                            PrecioMinimo = s.PrecioMinimo,
+                            PrecioMaximo = s.PrecioMaximo,
+                            PrecioPromedio = s.PrecioPromedio,
+                            ResultadoObtenido = s.ResultadoObtenido
+                        }).ToList()
+                })
+                .ToListAsync();
+
             return new PanelAdministrativoDto
             {
                 TotalUsuariosRegistrados = await _context.Usuarios.CountAsync(),
@@ -666,8 +742,131 @@ namespace X_Chang.CORE.Infrastructure.Repositories
                 TransaccionesEjecutadas = transaccionesEjecutadas,
                 VolumenPorMoneda = volumenPorMoneda,
                 VolumenPorDia = volumenPorDia,
-                OperacionesPorDia = volumenPorDia
+                OperacionesPorDia = volumenPorDia,
+                DistribucionPorTipo = distribucionPorTipo,
+                Monedas = monedas,
+                MejoresRutas = mejoresRutas
             };
+        }
+
+        public async Task<ActividadRecientePaginadaDto> ObtenerActividadRecienteAsync(FiltroActividadRecienteDto filtro)
+        {
+            var desde = filtro.FechaDesde?.Date ?? DateTime.Today.AddDays(-30);
+            var hastaExclusivo = filtro.FechaHasta?.Date.AddDays(1) ?? DateTime.Today.AddDays(1);
+
+            var todos = await ConstruirActividadRecienteAsync(desde, hastaExclusivo);
+
+            var total = todos.Count;
+            var porPagina = filtro.RegistrosPorPagina <= 0 ? 20 : filtro.RegistrosPorPagina;
+            var totalPaginas = total == 0 ? 1 : (int)Math.Ceiling(total / (decimal)porPagina);
+            var pagina = filtro.Pagina < 1 ? 1 : filtro.Pagina;
+            if (pagina > totalPaginas) pagina = totalPaginas;
+
+            var registros = todos.Skip((pagina - 1) * porPagina).Take(porPagina).ToList();
+
+            return new ActividadRecientePaginadaDto
+            {
+                Registros = registros,
+                PaginaActual = pagina,
+                TotalPaginas = totalPaginas,
+                TotalRegistros = total,
+                Mensaje = total == 0 ? "No existen operaciones para el período seleccionado" : string.Empty
+            };
+        }
+
+        public async Task<List<ActividadRecienteAdminDto>> ObtenerActividadRecienteParaExportarAsync(
+            DateTime? fechaDesde, DateTime? fechaHasta)
+        {
+            var desde = fechaDesde?.Date ?? DateTime.Today.AddDays(-30);
+            var hastaExclusivo = fechaHasta?.Date.AddDays(1) ?? DateTime.Today.AddDays(1);
+            return await ConstruirActividadRecienteAsync(desde, hastaExclusivo);
+        }
+
+        private async Task<List<ActividadRecienteAdminDto>> ConstruirActividadRecienteAsync(
+            DateTime desde, DateTime hastaExclusivo)
+        {
+            var ordenes = await _context.OrdenesCompra
+                .Include(o => o.Usuario)
+                .Include(o => o.ParMoneda).ThenInclude(p => p.MonedaOrigen)
+                .Include(o => o.ParMoneda).ThenInclude(p => p.MonedaDestino)
+                .Where(o => o.FechaCreacion >= desde && o.FechaCreacion < hastaExclusivo)
+                .Select(o => new ActividadRecienteAdminDto
+                {
+                    FechaHora = o.FechaCreacion,
+                    Usuario = o.Usuario.NombreUsuario,
+                    TipoOperacion = "Orden de compra",
+                    Par = o.ParMoneda.MonedaOrigen.CodigoIso + "/" + o.ParMoneda.MonedaDestino.CodigoIso,
+                    MontoTotal = o.TotalComprometido,
+                    Estado = o.Estado
+                })
+                .ToListAsync();
+
+            var ofertas = await _context.OfertasVenta
+                .Include(o => o.Usuario)
+                .Include(o => o.ParMoneda).ThenInclude(p => p.MonedaOrigen)
+                .Include(o => o.ParMoneda).ThenInclude(p => p.MonedaDestino)
+                .Where(o => o.FechaCreacion >= desde && o.FechaCreacion < hastaExclusivo)
+                .Select(o => new ActividadRecienteAdminDto
+                {
+                    FechaHora = o.FechaCreacion,
+                    Usuario = o.Usuario.NombreUsuario,
+                    TipoOperacion = "Oferta de venta",
+                    Par = o.ParMoneda.MonedaOrigen.CodigoIso + "/" + o.ParMoneda.MonedaDestino.CodigoIso,
+                    MontoTotal = o.TotalEsperado,
+                    Estado = o.Estado
+                })
+                .ToListAsync();
+
+            var inmediatas = await _context.OperacionesInmediatas
+                .Include(i => i.Usuario)
+                .Include(i => i.ParMoneda).ThenInclude(p => p.MonedaOrigen)
+                .Include(i => i.ParMoneda).ThenInclude(p => p.MonedaDestino)
+                .Where(i => i.OperacionPadreId == null
+                    && i.FechaOperacion >= desde && i.FechaOperacion < hastaExclusivo)
+                .Select(i => new ActividadRecienteAdminDto
+                {
+                    FechaHora = i.FechaOperacion,
+                    Usuario = i.Usuario.NombreUsuario,
+                    TipoOperacion = i.TipoOperacion,
+                    Par = i.ParMoneda.MonedaOrigen.CodigoIso + "/" + i.ParMoneda.MonedaDestino.CodigoIso,
+                    MontoTotal = i.TotalPagado ?? i.TotalRecibido ?? 0m,
+                    Estado = i.Estado
+                })
+                .ToListAsync();
+
+            var depositos = await _context.Depositos
+                .Include(d => d.Usuario)
+                .Include(d => d.Moneda)
+                .Where(d => d.FechaDeposito >= desde && d.FechaDeposito < hastaExclusivo)
+                .Select(d => new ActividadRecienteAdminDto
+                {
+                    FechaHora = d.FechaDeposito,
+                    Usuario = d.Usuario.NombreUsuario,
+                    TipoOperacion = "Deposito",
+                    Par = d.Moneda.CodigoIso,
+                    MontoTotal = d.MontoDepositado,
+                    Estado = d.Estado
+                })
+                .ToListAsync();
+
+            var retiros = await _context.Retiros
+                .Include(r => r.Usuario)
+                .Include(r => r.Moneda)
+                .Where(r => r.FechaRetiro >= desde && r.FechaRetiro < hastaExclusivo)
+                .Select(r => new ActividadRecienteAdminDto
+                {
+                    FechaHora = r.FechaRetiro,
+                    Usuario = r.Usuario.NombreUsuario,
+                    TipoOperacion = "Retiro",
+                    Par = r.Moneda.CodigoIso,
+                    MontoTotal = r.MontoRetirado,
+                    Estado = r.Estado
+                })
+                .ToListAsync();
+
+            return ordenes.Concat(ofertas).Concat(inmediatas).Concat(depositos).Concat(retiros)
+                .OrderByDescending(x => x.FechaHora)
+                .ToList();
         }
 
         private async Task<ParesMoneda> ObtenerParAsync(int parMonedaId)

@@ -49,5 +49,59 @@ namespace X_Chang.API.Controllers
                 return BadRequest(new { mensaje = ex.Message, detalle = ex.InnerException?.Message });
             }
         }
+
+        [HttpGet("actividad-reciente")]
+        public async Task<IActionResult> ObtenerActividadReciente([FromQuery] FiltroActividadRecienteDto filtro)
+        {
+            try
+            {
+                var resultado = await _service.ObtenerActividadRecienteAsync(ObtenerTokenSesion(), filtro);
+                return Ok(resultado);
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                return Unauthorized(new { mensaje = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { mensaje = ex.Message, detalle = ex.InnerException?.Message });
+            }
+        }
+
+        [HttpPost("actividad-reciente/exportar-excel")]
+        public async Task<IActionResult> ExportarActividadRecienteExcel([FromBody] ExportarPanelAdminRequestDto filtro)
+        {
+            try
+            {
+                var resultado = await _service.ExportarActividadRecienteExcelAsync(ObtenerTokenSesion(), filtro);
+                return File(resultado.Archivo, resultado.TipoContenido, resultado.NombreArchivo);
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                return Unauthorized(new { mensaje = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { mensaje = ex.Message, detalle = ex.InnerException?.Message });
+            }
+        }
+
+        [HttpPost("actividad-reciente/exportar-pdf")]
+        public async Task<IActionResult> ExportarActividadRecientePdf([FromBody] ExportarPanelAdminRequestDto filtro)
+        {
+            try
+            {
+                var resultado = await _service.ExportarActividadRecientePdfAsync(ObtenerTokenSesion(), filtro);
+                return File(resultado.Archivo, resultado.TipoContenido, resultado.NombreArchivo);
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                return Unauthorized(new { mensaje = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { mensaje = ex.Message, detalle = ex.InnerException?.Message });
+            }
+        }
     }
 }

@@ -179,6 +179,14 @@ public class OrdenService : IOrdenService
         int usuarioId,
         CrearOrdenRequest request)
     {
+        var estadoUsuario = await _context.Usuarios
+            .Where(u => u.UsuarioId == usuarioId)
+            .Select(u => u.Estado)
+            .FirstOrDefaultAsync();
+
+        if (estadoUsuario == "Restringido")
+            throw new InvalidOperationException("Su cuenta se encuentra restringida y no puede generar órdenes, ofertas ni operaciones inmediatas.");
+
         var resultado = await _mercadoRepository.CrearOrdenCompraAsync(
             usuarioId,
             new MercadoCrearOrdenCompraRequestDto

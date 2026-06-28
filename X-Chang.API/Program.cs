@@ -71,6 +71,7 @@ builder.Services.AddScoped<IRetiroRepository, RetiroRepository>();
 builder.Services.AddScoped<IRetiroService, RetiroService>();
 builder.Services.AddScoped<IMercadoRepository, MercadoRepository>();
 builder.Services.AddScoped<IMercadoService, MercadoService>();
+builder.Services.AddScoped<IPerfilService, PerfilService>();
 
 var app = builder.Build();
 
