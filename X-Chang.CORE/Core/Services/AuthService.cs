@@ -50,7 +50,10 @@ public class AuthService : IAuthService
             PaisId = request.PaisId,
             TemaVisual = "Claro",
             Estado = "Activo",
-            FechaRegistro = DateTime.UtcNow
+            FechaRegistro = DateTime.UtcNow,
+            Telefono = request.Telefono,
+            TipoDocumento = request.TipoDocumento,
+            NumeroDocumento = request.NumeroDocumento
         });
 
         await _authRepo.CrearBilleteraAsync(new Billeteras { UsuarioId = usuario.UsuarioId, FechaCreacion = DateTime.UtcNow });
@@ -86,8 +89,11 @@ public class AuthService : IAuthService
             });
         }
 
-        if (!exito || usuario == null)
-            throw new UnauthorizedAccessException("Correo o contraseña incorrectos.");
+        if (usuario == null)
+            throw new UnauthorizedAccessException("Usuario o correo no registrado.");
+
+        if (!exito)
+            throw new UnauthorizedAccessException("Contraseña incorrecta.");
 
         if (usuario.Estado != "Activo")
             throw new UnauthorizedAccessException($"La cuenta está {usuario.Estado.ToLower()}.");

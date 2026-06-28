@@ -25,6 +25,14 @@ public partial class Usuarios
 
     public DateTime? FechaUltimoAcceso { get; set; }
 
+    public string? Telefono { get; set; }
+
+    public string? TipoDocumento { get; set; }
+
+    public string? NumeroDocumento { get; set; }
+
+    public string? FotoUrl { get; set; }
+
     public virtual ICollection<AccesosUsuario> AccesosUsuario { get; set; } = new List<AccesosUsuario>();
 
     public virtual ICollection<AuditoriaAdministrativa> AuditoriaAdministrativaAdministrador { get; set; } = new List<AuditoriaAdministrativa>();

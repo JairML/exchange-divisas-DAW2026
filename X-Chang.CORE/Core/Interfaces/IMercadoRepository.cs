@@ -11,6 +11,8 @@ namespace X_Chang.CORE.Core.Interfaces
         Task<ResumenOfertaVentaDto> ObtenerResumenOfertaVentaAsync(int usuarioId, CrearOfertaVentaRequestDto request);
         Task<OfertaVentaResultadoDto> CrearOfertaVentaAsync(int usuarioId, CrearOfertaVentaRequestDto request);
         Task<PanelAdministrativoDto> ObtenerPanelAdministrativoAsync(FiltroPanelAdministrativoDto filtro);
+        Task<ActividadRecientePaginadaDto> ObtenerActividadRecienteAsync(FiltroActividadRecienteDto filtro);
+        Task<List<ActividadRecienteAdminDto>> ObtenerActividadRecienteParaExportarAsync(DateTime? fechaDesde, DateTime? fechaHasta);
         Task<bool> EsAdministradorActivoAsync(int usuarioId);
     }
 }
