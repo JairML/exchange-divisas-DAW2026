@@ -49,6 +49,7 @@ builder.Services.AddScoped<IOrdenService, OrdenService>();
 builder.Services.AddScoped<IOfertaService, OfertaService>();
 builder.Services.AddScoped<IHistorialTransaccionesService, HistorialTransaccionesService>();
 builder.Services.AddScoped<IConfiguracionUsuarioService, ConfiguracionUsuarioService>();
+builder.Services.AddScoped<IPerfilService, PerfilService>();
 
 builder.Services.Configure<SmtpSettings>(builder.Configuration.GetSection("SmtpSettings"));
 builder.Services.AddScoped<IEmailService, EmailService>();

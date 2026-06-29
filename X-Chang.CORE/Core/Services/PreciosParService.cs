@@ -624,12 +624,12 @@ namespace X_Chang.CORE.Core.Services
         {
             return rango switch
             {
-                "UltimoDia" => DateTime.UtcNow.AddDays(-1),
-                "UltimaSemana" => DateTime.UtcNow.AddDays(-7),
-                "UltimoMes" => DateTime.UtcNow.AddMonths(-1),
-                "UltimoAno" => DateTime.UtcNow.AddYears(-1),
+                "UltimoDia" => DateTime.Now.AddDays(-1),
+                "UltimaSemana" => DateTime.Now.AddDays(-7),
+                "UltimoMes" => DateTime.Now.AddMonths(-1),
+                "UltimoAno" => DateTime.Now.AddYears(-1),
                 "Total" => null,
-                _ => DateTime.UtcNow.AddDays(-1)
+                _ => DateTime.Now.AddDays(-1)
             };
         }
     }

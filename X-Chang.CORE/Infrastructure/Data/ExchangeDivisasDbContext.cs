@@ -828,6 +828,10 @@ public partial class ExchangeDivisasDbContext : DbContext
             entity.Property(e => e.TemaVisual)
                 .HasMaxLength(10)
                 .HasDefaultValue("Claro");
+            entity.Property(e => e.Telefono).HasMaxLength(20);
+            entity.Property(e => e.FotoUrl).HasMaxLength(500);
+            entity.Property(e => e.TipoDocumento).HasMaxLength(20);
+            entity.Property(e => e.NumeroDocumento).HasMaxLength(30);
 
             entity.HasOne(d => d.Pais).WithMany(p => p.Usuarios)
                 .HasForeignKey(d => d.PaisId)

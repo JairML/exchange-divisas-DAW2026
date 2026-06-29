@@ -307,6 +307,18 @@ namespace X_Chang.CORE.Infrastructure.Repositories
                 };
 
                 _context.EjecucionesOrden.Add(ejecucion);
+
+                _context.HistoricoPreciosPar.Add(new HistoricoPreciosPar
+                {
+                    ParMonedaId = par.ParMonedaId,
+                    MayorPrecioCompra = oferta.PrecioUnitario,
+                    MenorPrecioVenta = orden.PrecioUnitario,
+                    Margen = oferta.PrecioUnitario - orden.PrecioUnitario,
+                    VolumenCompra = cantidad,
+                    VolumenVenta = total,
+                    FechaRegistro = ahora
+                });
+
                 await _context.SaveChangesAsync();
 
                 _context.MovimientosBilletera.Add(new MovimientosBilletera
@@ -525,6 +537,18 @@ namespace X_Chang.CORE.Infrastructure.Repositories
                 };
 
                 _context.EjecucionesOrden.Add(ejecucion);
+
+                _context.HistoricoPreciosPar.Add(new HistoricoPreciosPar
+                {
+                    ParMonedaId = par.ParMonedaId,
+                    MayorPrecioCompra = oferta.PrecioUnitario,
+                    MenorPrecioVenta = orden.PrecioUnitario,
+                    Margen = oferta.PrecioUnitario - orden.PrecioUnitario,
+                    VolumenCompra = cantidad,
+                    VolumenVenta = total,
+                    FechaRegistro = ahora
+                });
+
                 await _context.SaveChangesAsync();
 
                 _context.MovimientosBilletera.Add(new MovimientosBilletera

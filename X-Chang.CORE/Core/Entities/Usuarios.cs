@@ -19,6 +19,14 @@ public partial class Usuarios
 
     public string TemaVisual { get; set; } = null!;
 
+    public string? Telefono { get; set; }
+
+    public string? FotoUrl { get; set; }
+
+    public string? TipoDocumento { get; set; }
+
+    public string? NumeroDocumento { get; set; }
+
     public string Estado { get; set; } = null!;
 
     public DateTime FechaRegistro { get; set; }

@@ -318,5 +318,18 @@ namespace X_Chang.CORE.Infrastructure.Repositories
                 Lista = lista
             };
         }
+        public async Task<int> ContarTransaccionesCompletadasAsync(int usuarioId)
+        {
+            var ordenes = await _context.OrdenesCompra
+                .CountAsync(o => o.UsuarioId == usuarioId && o.Estado == "Completada");
+
+            var ofertas = await _context.OfertasVenta
+                .CountAsync(o => o.UsuarioId == usuarioId && o.Estado == "Completada");
+
+            var operaciones = await _context.OperacionesInmediatas
+                .CountAsync(o => o.UsuarioId == usuarioId && o.Estado == "Completada" && o.OperacionPadreId == null);
+
+            return ordenes + ofertas + operaciones;
+        }
     }
 }

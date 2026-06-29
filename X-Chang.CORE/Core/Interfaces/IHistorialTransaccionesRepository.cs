@@ -23,5 +23,6 @@ namespace X_Chang.CORE.Core.Interfaces
             int usuarioId, DateTime? fechaDesde, DateTime? fechaHasta, int pagina, int registrosPorPagina);
 
         Task<HistorialTransaccionesResponseDto> ObtenerHistorialCompletoAsync(int usuarioId);
+        Task<int> ContarTransaccionesCompletadasAsync(int usuarioId);
     }
 }
