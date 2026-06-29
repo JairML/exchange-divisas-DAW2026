@@ -17,6 +17,10 @@ public partial class Usuarios
 
     public string PasswordHash { get; set; } = null!;
 
+    public string? Telefono { get; set; }
+
+    public string? FotoPerfilUrl { get; set; }
+
     public string TemaVisual { get; set; } = null!;
 
     public string Estado { get; set; } = null!;

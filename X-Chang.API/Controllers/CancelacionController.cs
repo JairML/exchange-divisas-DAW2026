@@ -43,11 +43,17 @@ namespace X_Chang.API.Controllers
                 UsuarioId,
                 "Cancelacion",
                 $"Cancelación de {can.TipoOperacion} completada",
-                $"Tu {can.TipoOperacion} ({can.Par}) fue cancelada exitosamente. " +
-                $"Cantidad cancelada: {can.CantidadCancelada}. " +
-                $"Monto reembolsado: {can.MontoReembolsado} {can.MonedaReembolso}. " +
-                $"Nuevo saldo: {can.NuevoSaldo} {can.MonedaReembolso}. " +
-                $"Fecha: {can.FechaCancelacion:dd/MM/yyyy HH:mm}.",
+                EmailHtmlBuilder.Build(
+                    $"Cancelación de {can.TipoOperacion}",
+                    $"Tu {can.TipoOperacion} del par {can.Par} fue cancelada exitosamente.",
+                    [
+                        ("Tipo de operación",  can.TipoOperacion),
+                        ("Par",                can.Par),
+                        ("Cantidad cancelada", can.CantidadCancelada.ToString("N2")),
+                        ("Monto reembolsado",  $"{can.MontoReembolsado.ToString("N2")} {can.MonedaReembolso}"),
+                        ("Nuevo saldo",        $"{can.NuevoSaldo.ToString("N2")} {can.MonedaReembolso}"),
+                        ("Fecha y hora",       can.FechaCancelacion.ToString("dd/MM/yyyy HH:mm")),
+                    ]),
                 can.TipoOperacion == "Orden de compra" ? "OrdenCompra" : "OfertaVenta",
                 can.CancelacionId);
 

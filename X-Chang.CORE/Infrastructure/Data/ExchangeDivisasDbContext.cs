@@ -823,8 +823,10 @@ public partial class ExchangeDivisasDbContext : DbContext
                 .HasMaxLength(20)
                 .HasDefaultValue("Activo");
             entity.Property(e => e.FechaRegistro).HasDefaultValueSql("(sysdatetime())");
+            entity.Property(e => e.FotoPerfilUrl).HasMaxLength(500);
             entity.Property(e => e.NombreUsuario).HasMaxLength(30);
             entity.Property(e => e.PasswordHash).HasMaxLength(255);
+            entity.Property(e => e.Telefono).HasMaxLength(20);
             entity.Property(e => e.TemaVisual)
                 .HasMaxLength(10)
                 .HasDefaultValue("Claro");
