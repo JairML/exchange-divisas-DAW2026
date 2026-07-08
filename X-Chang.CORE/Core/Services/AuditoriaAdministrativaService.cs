@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Text;
-using System.Text;
 using X_Chang.CORE.Core.DTOs.AuditoriaAdministrativa;
 using X_Chang.CORE.Core.Interfaces;
 

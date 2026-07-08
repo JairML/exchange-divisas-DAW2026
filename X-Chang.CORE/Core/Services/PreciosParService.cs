@@ -240,7 +240,7 @@ namespace X_Chang.CORE.Core.Services
                 : null;
 
             decimal? margenActual = mayorActual.HasValue && menorActual.HasValue
-                ? mayorActual.Value - menorActual.Value
+                ? menorActual.Value - mayorActual.Value
                 : null;
 
             var desde = ComputarDesde(rango);

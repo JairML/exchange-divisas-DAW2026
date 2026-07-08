@@ -21,7 +21,7 @@ namespace X_Chang.CORE.Infrastructure.Repositories
             return await _context.Usuarios.AnyAsync(u =>
                 u.UsuarioId == usuarioId &&
                 u.Estado == "Activo" &&
-                u.Rol.Nombre == "Administrador");
+                u.Rol.Nombre == "ADM");
         }
 
         public async Task<OperacionesActivasResponseDto> ObtenerOperacionesActivasAsync(int usuarioId, FiltroOperacionesActivasDto filtro)

@@ -1,10 +1,11 @@
-<Project Sdk="Microsoft.NET.Sdk.Web">
+﻿<Project Sdk="Microsoft.NET.Sdk.Web">
 
   <PropertyGroup>
     <TargetFramework>net9.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <RootNamespace>X_Chang.API</RootNamespace>
+    <UserSecretsId>a97e72a8-77f2-468a-9fb5-11dbdd6d76c5</UserSecretsId>
   </PropertyGroup>
 
   <ItemGroup>

@@ -1,6 +1,8 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Text;
+using System.Text.Json;
+using System.Data;
 using Microsoft.EntityFrameworkCore;
 using X_Chang.CORE.Core.DTOs.VentaInmediata;
 using X_Chang.CORE.Core.Entities;
@@ -187,25 +189,80 @@ namespace X_Chang.CORE.Infrastructure.Repositories
             await _context.SaveChangesAsync();
         }
 
+
         public async Task<VentaInmediataResponseDto> EjecutarVentaInmediataNormalAsync(
             int usuarioId,
             int parMonedaId,
             decimal cantidadAVender,
             bool venderCantidadDisponible)
         {
-            using var transaction = await _context.Database.BeginTransactionAsync();
+    var connection = _context.Database.GetDbConnection();
+    var debeCerrar = connection.State != ConnectionState.Open;
 
-            var result = await EjecutarVentaNormalInternaAsync(
-                usuarioId,
-                parMonedaId,
-                cantidadAVender,
-                "Normal",
-                null);
+    if (debeCerrar)
+        await connection.OpenAsync();
 
-            await transaction.CommitAsync();
+    try
+    {
+        await using var command = connection.CreateCommand();
+        command.CommandText = "select public.ejecutar_venta_inmediata_segura(@usuarioid, @parmonedaid, @cantidad)::text";
 
-            return result;
-        }
+        var pUsuario = command.CreateParameter();
+        pUsuario.ParameterName = "usuarioid";
+        pUsuario.Value = usuarioId;
+        command.Parameters.Add(pUsuario);
+
+        var pPar = command.CreateParameter();
+        pPar.ParameterName = "parmonedaid";
+        pPar.Value = parMonedaId;
+        command.Parameters.Add(pPar);
+
+        var pCantidad = command.CreateParameter();
+        pCantidad.ParameterName = "cantidad";
+        pCantidad.Value = cantidadAVender;
+        command.Parameters.Add(pCantidad);
+
+        var json = (string?)await command.ExecuteScalarAsync()
+            ?? throw new InvalidOperationException("No se obtuvo respuesta de Supabase.");
+
+        using var document = JsonDocument.Parse(json);
+        var root = document.RootElement;
+
+        return new VentaInmediataResponseDto
+        {
+            OperacionInmediataId = root.TryGetProperty("operacionid", out var id) ? id.GetInt32() : 0,
+            ParMonedaId = parMonedaId,
+            TipoOperacion = "Venta inmediata",
+            MetodoEjecucion = "Normal",
+            MonedaOrigen = root.TryGetProperty("monedarecibida", out var recibida) ? recibida.GetString() ?? string.Empty : string.Empty,
+            MonedaDestino = root.TryGetProperty("monedavendida", out var vendida) ? vendida.GetString() ?? string.Empty : string.Empty,
+            CantidadSolicitada = cantidadAVender,
+            CantidadEjecutada = root.TryGetProperty("cantidadvendida", out var cantidadVendida) ? cantidadVendida.GetDecimal() : cantidadAVender,
+            TotalRecibido = root.TryGetProperty("totalrecibido", out var totalRecibido) ? totalRecibido.GetDecimal() : 0m,
+            Estado = "Completada",
+            FechaOperacion = DateTime.UtcNow,
+            Ejecuciones = new List<DetalleEjecucionVentaDto>()
+        };
+    }
+    catch (Exception ex) when (ex.Message.Contains("Saldo insuficiente", StringComparison.OrdinalIgnoreCase))
+    {
+        throw new InvalidOperationException("Saldo insuficiente");
+    }
+    catch (Exception ex) when (ex.Message.Contains("Liquidez insuficiente", StringComparison.OrdinalIgnoreCase))
+    {
+        throw new InvalidOperationException("Liquidez insuficiente");
+    }
+    catch (Exception ex) when (ex.Message.Contains("Valor inválido", StringComparison.OrdinalIgnoreCase))
+    {
+        throw new InvalidOperationException("Valor inválido");
+    }
+    finally
+    {
+        if (debeCerrar)
+            await connection.CloseAsync();
+    }
+}
+
 
         public async Task<VentaInmediataResponseDto> EjecutarVentaInmediataPorRutaAsync(
             int usuarioId,

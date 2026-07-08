@@ -11,6 +11,8 @@ using X_Chang.CORE.Infrastructure.Repositories;
 using X_Chang.CORE.Infrastructure.Shared;
 using X_Chang.CORE.Services;
 
+AppContext.SetSwitch("Npgsql.EnableLegacyTimestampBehavior", true);
+
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddCors(options =>
@@ -25,7 +27,7 @@ builder.Services.AddControllers();
 builder.Services.AddOpenApi();
 
 builder.Services.AddDbContext<ExchangeDivisasDbContext>(options =>
-    options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
+    options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
 
 builder.Services.Configure<SessionSettings>(builder.Configuration.GetSection("SessionSettings"));
 builder.Services.AddScoped<IAuthRepository, AuthRepository>();
@@ -53,7 +55,8 @@ builder.Services.AddScoped<IConfiguracionUsuarioService, ConfiguracionUsuarioSer
 builder.Services.Configure<SmtpSettings>(builder.Configuration.GetSection("SmtpSettings"));
 builder.Services.AddScoped<IEmailService, EmailService>();
 builder.Services.AddScoped<INotificacionesCorreoService, NotificacionesCorreoService>();
-builder.Services.AddHostedService<NotificacionesBackgroundService>();
+// Correos desactivados temporalmente: por ahora solo se insertarán registros en notificacionescorreo.
+// builder.Services.AddHostedService<NotificacionesBackgroundService>();
 
 builder.Services.AddScoped<IAuditoriaAdministrativaRepository, AuditoriaAdministrativaRepository>();
 builder.Services.AddScoped<IAuditoriaAdministrativaService, AuditoriaAdministrativaService>();

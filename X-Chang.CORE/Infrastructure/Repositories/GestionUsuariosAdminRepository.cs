@@ -1,4 +1,4 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using X_Chang.CORE.Core.DTOs.GestionUsuarios;
 using X_Chang.CORE.Core.Entities;
 using X_Chang.CORE.Core.Interfaces;
@@ -21,7 +21,7 @@ namespace X_Chang.CORE.Infrastructure.Repositories
                 .AnyAsync(u =>
                     u.UsuarioId == usuarioId &&
                     u.Estado == "Activo" &&
-                    u.Rol.Nombre == "Administrador");
+                    u.Rol.Nombre == "ADM");
         }
 
         public async Task<List<UsuarioAdminResumenDto>> BuscarUsuariosAsync(FiltroUsuariosAdminDto filtro)
@@ -134,7 +134,7 @@ namespace X_Chang.CORE.Infrastructure.Repositories
             if (usuario.UsuarioId == administradorId)
                 throw new InvalidOperationException("El administrador no puede restringirse a sí mismo.");
 
-            if (usuario.Rol.Nombre == "Administrador")
+            if (usuario.Rol.Nombre == "ADM")
                 throw new InvalidOperationException("No es posible restringir una cuenta de administrador.");
 
             if (usuario.Estado == "Restringido")

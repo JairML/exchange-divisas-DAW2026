@@ -46,8 +46,8 @@ public class SessionAuthHandler : AuthenticationHandler<AuthenticationSchemeOpti
         if (sesion == null || sesion.FechaExpiracion < DateTime.UtcNow)
             return AuthenticateResult.Fail("Token de sesión inválido o expirado.");
 
-        if (sesion.Usuario.Estado != "Activo")
-            return AuthenticateResult.Fail("La cuenta no está activa.");
+        if (sesion.Usuario.Estado != "Activo" && sesion.Usuario.Estado != "Restringido")
+            return AuthenticateResult.Fail("Credenciales inválidas");
 
         var claims = new[]
         {
@@ -55,7 +55,7 @@ public class SessionAuthHandler : AuthenticationHandler<AuthenticationSchemeOpti
             new Claim("UsuarioId", sesion.UsuarioId.ToString()),
             new Claim("NombreUsuario", sesion.Usuario.NombreUsuario),
             new Claim("CorreoElectronico", sesion.Usuario.CorreoElectronico),
-            new Claim("Rol", sesion.Usuario.Rol.Nombre),
+            new Claim("Rol", sesion.Usuario.Rol.Nombre == "ADM" ? "Administrador" : "Usuario"),
             new Claim("TemaVisual", sesion.Usuario.TemaVisual),
         };
 

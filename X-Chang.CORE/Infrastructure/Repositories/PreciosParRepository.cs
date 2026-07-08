@@ -87,22 +87,31 @@ namespace X_Chang.CORE.Infrastructure.Repositories
         }
 
         public async Task<List<PuntoSerieHistoricaDto>> ObtenerSerieHistoricaAsync(
-            int parMonedaId, DateTime? desde)
+    int parMonedaId, DateTime? desde)
         {
             var query = _context.HistoricoPreciosPar
+                .AsNoTracking()
                 .Where(h => h.ParMonedaId == parMonedaId);
 
             if (desde.HasValue)
-                query = query.Where(h => h.FechaRegistro >= desde.Value);
+            {
+                var desdeUtc = DateTime.SpecifyKind(desde.Value, DateTimeKind.Utc);
+
+                query = query.Where(h =>
+                    (h.SnapshotMinuto ?? h.FechaRegistro) >= desdeUtc);
+            }
 
             return await query
-                .OrderBy(h => h.FechaRegistro)
+                .OrderBy(h => h.SnapshotMinuto ?? h.FechaRegistro)
                 .Select(h => new PuntoSerieHistoricaDto
                 {
-                    FechaHora = h.FechaRegistro,
+                    FechaHora = h.SnapshotMinuto ?? h.FechaRegistro,
                     MayorPrecioCompra = h.MayorPrecioCompra,
                     MenorPrecioVenta = h.MenorPrecioVenta,
-                    Margen = h.Margen
+                    Margen =
+                        h.MayorPrecioCompra.HasValue && h.MenorPrecioVenta.HasValue
+                            ? h.MenorPrecioVenta.Value - h.MayorPrecioCompra.Value
+                            : null
                 })
                 .ToListAsync();
         }

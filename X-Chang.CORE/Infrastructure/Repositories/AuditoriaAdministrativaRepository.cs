@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Text;
 using Microsoft.EntityFrameworkCore;
@@ -23,7 +23,7 @@ namespace X_Chang.CORE.Infrastructure.Repositories
                 .AnyAsync(u =>
                     u.UsuarioId == usuarioId &&
                     u.Estado == "Activo" &&
-                    u.Rol.Nombre == "Administrador");
+                    u.Rol.Nombre == "ADM");
         }
 
         public async Task<AuditoriaAdminPaginadoDto> BuscarAuditoriaAsync(

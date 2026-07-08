@@ -1,6 +1,7 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Metadata;
 using X_Chang.CORE.Core.Entities;
 
 namespace X_Chang.CORE.Infrastructure.Data;
@@ -87,7 +88,7 @@ public partial class ExchangeDivisasDbContext : DbContext
         // ("ConnectionStrings:DevConnection"); esta queda como respaldo para el diseñador de EF.
         if (!optionsBuilder.IsConfigured)
         {
-            optionsBuilder.UseSqlServer("Server=localhost;Database=ExchangeDivisasDB;Trusted_Connection=True;TrustServerCertificate=True");
+            optionsBuilder.UseNpgsql("Host=db.pzaucxfwpbfkrwpwnfhv.supabase.co;Port=5432;Database=postgres;Username=postgres;Password=TU_DATABASE_PASSWORD;SSL Mode=Require;Trust Server Certificate=true");
         }
     }
 
@@ -345,23 +346,52 @@ public partial class ExchangeDivisasDbContext : DbContext
 
         modelBuilder.Entity<HistoricoPreciosPar>(entity =>
         {
-            entity.HasKey(e => e.HistoricoPrecioId).HasName("PK__Historic__1F78ECE4B01FEA34");
+            entity.ToTable("historicopreciospar");
 
-            entity.HasIndex(e => new { e.ParMonedaId, e.FechaRegistro }, "IX_HistoricoPreciosPar_ParFecha").IsDescending(false, true);
+            entity.HasKey(e => e.HistoricoPrecioId)
+                .HasName("historicopreciospar_pkey");
 
-            entity.Property(e => e.FechaRegistro).HasDefaultValueSql("(sysdatetime())");
-            entity.Property(e => e.Margen)
-                .HasComputedColumnSql("(case when [MayorPrecioCompra] IS NOT NULL AND [MenorPrecioVenta] IS NOT NULL then [MenorPrecioVenta]-[MayorPrecioCompra]  end)", false)
-                .HasColumnType("decimal(29, 8)");
-            entity.Property(e => e.MayorPrecioCompra).HasColumnType("decimal(28, 8)");
-            entity.Property(e => e.MenorPrecioVenta).HasColumnType("decimal(28, 8)");
-            entity.Property(e => e.VolumenCompra).HasColumnType("decimal(28, 8)");
-            entity.Property(e => e.VolumenVenta).HasColumnType("decimal(28, 8)");
+            entity.Property(e => e.HistoricoPrecioId)
+                .HasColumnName("historicoprecioid");
 
-            entity.HasOne(d => d.ParMoneda).WithMany(p => p.HistoricoPreciosPar)
+            entity.Property(e => e.ParMonedaId)
+                .HasColumnName("parmonedaid");
+
+            entity.Property(e => e.MayorPrecioCompra)
+                .HasColumnName("mayorpreciocompra")
+                .HasColumnType("numeric(28, 8)");
+
+            entity.Property(e => e.MenorPrecioVenta)
+                .HasColumnName("menorprecioventa")
+                .HasColumnType("numeric(28, 8)");
+
+            entity.Property(e => e.VolumenCompra)
+                .HasColumnName("volumencompra")
+                .HasColumnType("numeric(28, 8)");
+
+            entity.Property(e => e.VolumenVenta)
+                .HasColumnName("volumenventa")
+                .HasColumnType("numeric(28, 8)");
+
+            entity.Property(e => e.FechaRegistro)
+                .HasColumnName("fecharegistro")
+                .HasDefaultValueSql("now()");
+
+            entity.Property(e => e.SnapshotMinuto)
+                .HasColumnName("snapshotminuto");
+
+            entity.Ignore(e => e.Margen);
+
+            entity.HasIndex(e => new { e.ParMonedaId, e.SnapshotMinuto })
+                .HasDatabaseName("uq_historicopreciospar_par_minuto")
+                .IsUnique()
+                .HasFilter("snapshotminuto is not null");
+
+            entity.HasOne(d => d.ParMoneda)
+                .WithMany(p => p.HistoricoPreciosPar)
                 .HasForeignKey(d => d.ParMonedaId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK__Historico__ParMo__0D44F85C");
+                .OnDelete(DeleteBehavior.Cascade)
+                .HasConstraintName("historicopreciospar_parmonedaid_fkey");
         });
 
         modelBuilder.Entity<MetodosPago>(entity =>
@@ -842,8 +872,45 @@ public partial class ExchangeDivisasDbContext : DbContext
                 .HasConstraintName("FK__Usuarios__RolId__5CD6CB2B");
         });
 
+        ApplySupabaseNamingConventions(modelBuilder);
+
         OnModelCreatingPartial(modelBuilder);
     }
+
+    private static void ApplySupabaseNamingConventions(ModelBuilder modelBuilder)
+    {
+        foreach (var entityType in modelBuilder.Model.GetEntityTypes())
+        {
+            var tableName = entityType.GetTableName();
+            if (!string.IsNullOrWhiteSpace(tableName))
+            {
+                entityType.SetTableName(tableName.ToLowerInvariant());
+            }
+
+            var finalTableName = entityType.GetTableName();
+            if (string.IsNullOrWhiteSpace(finalTableName))
+                continue;
+
+            var storeObject = StoreObjectIdentifier.Table(finalTableName, entityType.GetSchema());
+
+            foreach (var property in entityType.GetProperties())
+            {
+                var columnName = property.GetColumnName(storeObject);
+                if (!string.IsNullOrWhiteSpace(columnName))
+                    property.SetColumnName(columnName.ToLowerInvariant());
+            }
+
+            foreach (var key in entityType.GetKeys())
+                key.SetName(key.GetName()?.ToLowerInvariant());
+
+            foreach (var foreignKey in entityType.GetForeignKeys())
+                foreignKey.SetConstraintName(foreignKey.GetConstraintName()?.ToLowerInvariant());
+
+            foreach (var index in entityType.GetIndexes())
+                index.SetDatabaseName(index.GetDatabaseName()?.ToLowerInvariant());
+        }
+    }
+
 
     partial void OnModelCreatingPartial(ModelBuilder modelBuilder);
 }
