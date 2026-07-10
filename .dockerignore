@@ -1,0 +1,28 @@
+# Build artifacts
+**/bin/
+**/obj/
+
+# IDE / tooling
+.vs/
+.vscode/
+*.user
+*.suo
+
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# Secrets / entornos locales (NO deben ir a la imagen)
+**/appsettings.Development.json
+**/appsettings.*.local.json
+.env
+.env.*
+
+# Docker
+Dockerfile
+.dockerignore
+
+# Docs / misc
+README.md
+*.md
