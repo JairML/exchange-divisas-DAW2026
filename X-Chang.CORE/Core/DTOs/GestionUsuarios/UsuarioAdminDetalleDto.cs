@@ -1,7 +1,3 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Text;
-
 namespace X_Chang.CORE.Core.DTOs.GestionUsuarios
 {
     public class UsuarioAdminDetalleDto
@@ -16,8 +12,14 @@ namespace X_Chang.CORE.Core.DTOs.GestionUsuarios
 
         public string Estado { get; set; } = string.Empty;
 
+        public string Rol { get; set; } = string.Empty;
+
+        public bool EsAdministrador { get; set; }
+
         public List<SaldoUsuarioAdminDto> Saldos { get; set; } = new();
 
         public List<HistorialUsuarioAdminDto> HistorialTransacciones { get; set; } = new();
+
+        public List<HistorialRestriccionAdminDto> HistorialRestricciones { get; set; } = new();
     }
 }

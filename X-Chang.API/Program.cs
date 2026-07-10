@@ -30,6 +30,7 @@ builder.Services.AddDbContext<ExchangeDivisasDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
 
 builder.Services.Configure<SessionSettings>(builder.Configuration.GetSection("SessionSettings"));
+builder.Services.Configure<GroqSettings>(builder.Configuration.GetSection("Groq"));
 builder.Services.AddScoped<IAuthRepository, AuthRepository>();
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddAuthentication("Session")
@@ -67,6 +68,7 @@ builder.Services.AddScoped<ICompraInmediataService, CompraInmediataService>();
 builder.Services.AddScoped<IDepositoRepository, DepositoRepository>();
 builder.Services.AddScoped<IDepositoService, DepositoService>();
 builder.Services.AddScoped<IGestionUsuariosAdminRepository, GestionUsuariosAdminRepository>();
+builder.Services.AddHttpClient<IAdminMensajeIaService, GroqAdminMensajeIaService>();
 builder.Services.AddScoped<IGestionUsuariosAdminService, GestionUsuariosAdminService>();
 builder.Services.AddScoped<IVentaInmediataRepository, VentaInmediataRepository>();
 builder.Services.AddScoped<IVentaInmediataService, VentaInmediataService>();

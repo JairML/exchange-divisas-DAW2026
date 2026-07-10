@@ -1,6 +1,3 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Text;
 using X_Chang.CORE.Core.DTOs.GestionUsuarios;
 
 namespace X_Chang.CORE.Core.Interfaces
@@ -24,5 +21,11 @@ namespace X_Chang.CORE.Core.Interfaces
             string tokenSesion,
             int usuarioId,
             CambiarEstadoUsuarioRequestDto request);
+
+        Task<GenerarMensajeIaResponseDto> GenerarMensajeIaAsync(
+            string tokenSesion,
+            int usuarioId,
+            GenerarMensajeIaRequestDto request,
+            CancellationToken cancellationToken = default);
     }
 }

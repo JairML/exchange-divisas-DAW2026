@@ -107,5 +107,27 @@ namespace X_Chang.API.Controllers
                 return BadRequest(new { mensaje = ex.Message, detalle = ex.InnerException?.Message });
             }
         }
+
+        [HttpPost("usuarios/{usuarioId}/mensaje-ia")]
+        public async Task<IActionResult> GenerarMensajeIa(
+            int usuarioId,
+            [FromBody] GenerarMensajeIaRequestDto request,
+            CancellationToken cancellationToken)
+        {
+            try
+            {
+                var token = ObtenerTokenSesion();
+                var resultado = await _service.GenerarMensajeIaAsync(token, usuarioId, request, cancellationToken);
+                return Ok(resultado);
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                return Unauthorized(new { mensaje = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { mensaje = ex.Message, detalle = ex.InnerException?.Message });
+            }
+        }
     }
 }
