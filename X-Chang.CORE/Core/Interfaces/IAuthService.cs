@@ -8,4 +8,6 @@ public interface IAuthService
     Task<AuthResponseDto> LoginAsync(LoginRequestDto request);
     Task LogoutAsync(int usuarioId, string token);
     Task<AuthResponseDto> RefreshTokenAsync(RefreshTokenRequestDto request);
+    Task SolicitarRecuperacionAsync(string correo);
+    Task RestablecerPasswordAsync(ResetPasswordRequestDto request);
 }

@@ -14,16 +14,19 @@ public class AuthService : IAuthService
     private readonly ISesionUsuarioRepository _sesionRepo;
     private readonly SessionSettings _settings;
     private readonly IEmailService _emailService;
+    private readonly FrontendSettings _frontend;
 
     public AuthService(
         IAuthRepository authRepo,
         ISesionUsuarioRepository sesionRepo,
         IOptions<SessionSettings> settings,
+        IOptions<FrontendSettings> frontend,
         IEmailService emailService)
     {
         _authRepo = authRepo;
         _sesionRepo = sesionRepo;
         _settings = settings.Value;
+        _frontend = frontend.Value;
         _emailService = emailService;
     }
 
@@ -133,6 +136,43 @@ public class AuthService : IAuthService
 
         await _sesionRepo.CerrarSesionAsync(request.Token);
         return await GenerarResponseAsync(sesion.Usuario, sesion.Usuario.Rol.Nombre);
+    }
+
+    public async Task SolicitarRecuperacionAsync(string correo)
+    {
+        var usuario = await _authRepo.BuscarPorCorreoAsync(correo.Trim());
+        if (usuario == null) return;
+
+        var token = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32))
+            .Replace('+', '-').Replace('/', '_').TrimEnd('=');
+        var expira = DateTime.UtcNow.AddHours(1);
+
+        await _authRepo.GuardarTokenRecuperacionAsync(usuario.UsuarioId, token, expira);
+
+        var enlace = $"{_frontend.BaseUrl.TrimEnd('/')}/restablecer-password?token={Uri.EscapeDataString(token)}";
+
+        await _emailService.EnviarAsync(
+            usuario.CorreoElectronico,
+            "Recupera tu contraseña de X-Chang",
+            $"""
+            <h2>Recuperación de contraseña</h2>
+            <p>Recibimos una solicitud para restablecer tu contraseña de X-Chang.</p>
+            <p><a href="{enlace}">Haz clic aquí para elegir una nueva contraseña</a></p>
+            <p>Este enlace expira en 1 hora. Si no fuiste tú, ignora este correo.</p>
+            <br/>
+            <p>El equipo de X-Chang</p>
+            """);
+    }
+
+    public async Task RestablecerPasswordAsync(ResetPasswordRequestDto request)
+    {
+        if (request.NuevaPassword != request.ConfirmarPassword)
+            throw new InvalidOperationException("Las contraseñas no coinciden.");
+
+        var usuario = await _authRepo.BuscarPorTokenRecuperacionValidoAsync(request.Token)
+            ?? throw new InvalidOperationException("El enlace no es válido o ha expirado.");
+
+        await _authRepo.ActualizarPasswordYLimpiarTokenAsync(usuario.UsuarioId, HashSha256(request.NuevaPassword));
     }
 
     private async Task<AuthResponseDto> GenerarResponseAsync(Usuarios usuario, string rolNombre)

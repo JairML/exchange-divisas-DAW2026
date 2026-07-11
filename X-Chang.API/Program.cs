@@ -31,6 +31,7 @@ builder.Services.AddDbContext<ExchangeDivisasDbContext>(options =>
 
 builder.Services.Configure<SessionSettings>(builder.Configuration.GetSection("SessionSettings"));
 builder.Services.Configure<GroqSettings>(builder.Configuration.GetSection("Groq"));
+builder.Services.Configure<FrontendSettings>(builder.Configuration.GetSection("FrontendSettings"));
 builder.Services.AddScoped<IAuthRepository, AuthRepository>();
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddAuthentication("Session")
