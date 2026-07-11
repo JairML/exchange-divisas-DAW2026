@@ -12,10 +12,12 @@ namespace X_Chang.API.Controllers;
 public class OrdenesController : ControllerBase
 {
     private readonly IOrdenService _ordenService;
+    private readonly INotificacionesCorreoService _notifService;
 
-    public OrdenesController(IOrdenService ordenService)
+    public OrdenesController(IOrdenService ordenService, INotificacionesCorreoService notifService)
     {
         _ordenService = ordenService;
+        _notifService = notifService;
     }
 
     private int UsuarioId => int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
@@ -57,6 +59,17 @@ public class OrdenesController : ControllerBase
         try
         {
             var result = await _ordenService.CrearOrdenCompraAsync(UsuarioId, request);
+
+            await _notifService.EncolarAsync(
+                UsuarioId,
+                "OrdenCompra",
+                $"Orden de compra registrada: {result.MonedaOrigen} → {result.MonedaDestino}",
+                $"Tu orden de compra de {result.CantidadOriginal} {result.MonedaDestino} a {result.PrecioUnitario} fue registrada. " +
+                $"Ejecutado hasta ahora: {result.CantidadObtenida} {result.MonedaDestino}. " +
+                $"Estado: {result.Estado}. Fecha: {result.FechaCreacion:dd/MM/yyyy HH:mm}.",
+                "OrdenCompra",
+                result.OrdenCompraId);
+
             return CreatedAtAction(nameof(ObtenerOrden), new { id = result.OrdenCompraId }, result);
         }
         catch (InvalidOperationException ex)
