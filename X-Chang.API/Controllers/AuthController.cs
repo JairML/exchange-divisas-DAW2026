@@ -71,10 +71,10 @@ public class AuthController : ControllerBase
     }
 
     [HttpPost("forgot-password")]
-    public async Task<IActionResult> ForgotPassword([FromBody] string correoElectronico)
+    public async Task<IActionResult> ForgotPassword([FromBody] ForgotPasswordRequestDto request)
     {
-        if (!string.IsNullOrWhiteSpace(correoElectronico))
-            await _authService.SolicitarRecuperacionAsync(correoElectronico);
+        if (!string.IsNullOrWhiteSpace(request.CorreoElectronico))
+            await _authService.SolicitarRecuperacionAsync(request.CorreoElectronico);
 
         return Ok(new { mensaje = "Si el correo está registrado, te enviamos un enlace para restablecer tu contraseña." });
     }
