@@ -1,3 +1,4 @@
+using System.Data;
 using Microsoft.EntityFrameworkCore;
 using X_Chang.CORE.Core.DTOs.Mercado;
 using X_Chang.CORE.Core.Entities;
@@ -298,7 +299,9 @@ namespace X_Chang.CORE.Infrastructure.Repositories
 
         public async Task<OrdenCompraResultadoDto> CrearOrdenCompraAsync(int usuarioId, CrearOrdenCompraRequestDto request)
         {
-            using var tx = await _context.Database.BeginTransactionAsync();
+            try
+            {
+            using var tx = await _context.Database.BeginTransactionAsync(IsolationLevel.Serializable);
             var ahora = DateTime.Now;
             var par = await ObtenerParAsync(request.ParMonedaId);
             var totalMaximo = request.CantidadAObtener * request.PrecioUnitario;
@@ -328,6 +331,7 @@ namespace X_Chang.CORE.Infrastructure.Repositories
 
             _context.OrdenesCompra.Add(orden);
             await _context.SaveChangesAsync();
+            RegistrarEstado("OrdenCompra", orden.OrdenCompraId, null, "Activa", "Creación", null);
 
             _context.MovimientosBilletera.Add(new MovimientosBilletera
             {
@@ -356,11 +360,13 @@ namespace X_Chang.CORE.Infrastructure.Repositories
                 orden.TotalEjecutado += total;
                 orden.FechaActualizacion = ahora;
 
+                var estadoAnteriorOferta = oferta.Estado;
                 oferta.CantidadVendida += cantidad;
                 oferta.CantidadPendiente -= cantidad;
                 oferta.TotalRecibido += total;
                 oferta.FechaActualizacion = ahora;
                 oferta.Estado = oferta.CantidadPendiente <= 0 ? "Completada" : "Parcialmente ejecutada";
+                RegistrarEstado("OfertaVenta", oferta.OfertaVentaId, estadoAnteriorOferta, oferta.Estado, "Ejecución parcial", cantidad);
 
                 await SincronizarOrdenEspejoExactaDesdeOfertaAsync(oferta);
 
@@ -433,6 +439,9 @@ namespace X_Chang.CORE.Infrastructure.Repositories
             }
 
             orden.Estado = orden.CantidadPendiente <= 0 ? "Completada" : orden.CantidadObtenida > 0 ? "Parcialmente ejecutada" : "Activa";
+            if (orden.Estado != "Activa")
+                RegistrarEstado("OrdenCompra", orden.OrdenCompraId, "Activa", orden.Estado,
+                    orden.Estado == "Completada" ? "Ejecución completa" : "Ejecución parcial", orden.CantidadObtenida);
             var montoReembolsado = await AjustarReservaOrdenYReembolsarMejorPrecioAsync(orden, par.MonedaOrigenId, ahora);
             int? ofertaEspejoId = null;
 
@@ -468,6 +477,12 @@ namespace X_Chang.CORE.Infrastructure.Repositories
                 FechaCreacion = orden.FechaCreacion,
                 Ejecuciones = ejecuciones
             };
+            }
+            catch (InvalidOperationException) { throw; }
+            catch (Exception ex) when (EsConcurrenciaFallida(ex))
+            {
+                throw new InvalidOperationException("Alta demanda en este par de divisas. Por favor, intenta nuevamente en unos segundos.");
+            }
         }
 
         public async Task<ResumenOfertaVentaDto> ObtenerResumenOfertaVentaAsync(int usuarioId, CrearOfertaVentaRequestDto request)
@@ -515,7 +530,9 @@ namespace X_Chang.CORE.Infrastructure.Repositories
 
         public async Task<OfertaVentaResultadoDto> CrearOfertaVentaAsync(int usuarioId, CrearOfertaVentaRequestDto request)
         {
-            using var tx = await _context.Database.BeginTransactionAsync();
+            try
+            {
+            using var tx = await _context.Database.BeginTransactionAsync(IsolationLevel.Serializable);
             var ahora = DateTime.Now;
             var par = await ObtenerParAsync(request.ParMonedaId);
             var totalEsperado = request.CantidadAVender * request.PrecioUnitario;
@@ -545,6 +562,7 @@ namespace X_Chang.CORE.Infrastructure.Repositories
 
             _context.OfertasVenta.Add(oferta);
             await _context.SaveChangesAsync();
+            RegistrarEstado("OfertaVenta", oferta.OfertaVentaId, null, "Activa", "Creación", null);
 
             _context.MovimientosBilletera.Add(new MovimientosBilletera
             {
@@ -573,11 +591,13 @@ namespace X_Chang.CORE.Infrastructure.Repositories
                 oferta.TotalRecibido += total;
                 oferta.FechaActualizacion = ahora;
 
+                var estadoAnteriorOrden = orden.Estado;
                 orden.CantidadObtenida += cantidad;
                 orden.CantidadPendiente -= cantidad;
                 orden.TotalEjecutado += total;
                 orden.FechaActualizacion = ahora;
                 orden.Estado = orden.CantidadPendiente <= 0 ? "Completada" : "Parcialmente ejecutada";
+                RegistrarEstado("OrdenCompra", orden.OrdenCompraId, estadoAnteriorOrden, orden.Estado, "Ejecución parcial", cantidad);
 
                 await AjustarReservaOrdenYReembolsarMejorPrecioAsync(orden, par.MonedaOrigenId, ahora);
                 await SincronizarOfertaEspejoExactaDesdeOrdenAsync(orden);
@@ -651,6 +671,9 @@ namespace X_Chang.CORE.Infrastructure.Repositories
             }
 
             oferta.Estado = oferta.CantidadPendiente <= 0 ? "Completada" : oferta.CantidadVendida > 0 ? "Parcialmente ejecutada" : "Activa";
+            if (oferta.Estado != "Activa")
+                RegistrarEstado("OfertaVenta", oferta.OfertaVentaId, "Activa", oferta.Estado,
+                    oferta.Estado == "Completada" ? "Ejecución completa" : "Ejecución parcial", oferta.CantidadVendida);
             int? ordenEspejoId = null;
 
             _context.HistorialTransacciones.Add(new HistorialTransacciones
@@ -684,6 +707,12 @@ namespace X_Chang.CORE.Infrastructure.Repositories
                 FechaCreacion = oferta.FechaCreacion,
                 Ejecuciones = ejecuciones
             };
+            }
+            catch (InvalidOperationException) { throw; }
+            catch (Exception ex) when (EsConcurrenciaFallida(ex))
+            {
+                throw new InvalidOperationException("Alta demanda en este par de divisas. Por favor, intenta nuevamente en unos segundos.");
+            }
         }
 
         public async Task<PanelAdministrativoDto> ObtenerPanelAdministrativoAsync(FiltroPanelAdministrativoDto filtro)
@@ -1080,6 +1109,43 @@ namespace X_Chang.CORE.Infrastructure.Repositories
                 ReferenciaTipo = referenciaTipo,
                 ReferenciaId = referenciaId
             });
+        }
+
+        private void RegistrarEstado(string tipo, int referenciaId, string? anterior, string nuevo, string? motivo, decimal? cantidad)
+        {
+            _context.LogEstadosOperacion.Add(new LogEstadosOperacion
+            {
+                TipoOperacion = tipo,
+                ReferenciaId = referenciaId,
+                EstadoAnterior = anterior,
+                EstadoNuevo = nuevo,
+                FechaCambio = DateTime.Now,
+                Motivo = motivo,
+                CantidadAfectada = cantidad
+            });
+        }
+
+        private static bool EsConcurrenciaFallida(Exception ex)
+        {
+            var msg = ex.InnerException?.Message ?? ex.Message;
+            return msg.Contains("40001") || msg.Contains("could not serialize") || msg.Contains("serialization");
+        }
+
+        public async Task<List<LogEstadoOperacionDto>> GetEstadosOperacionAsync(string tipo, int referenciaId)
+        {
+            return await _context.LogEstadosOperacion
+                .Where(l => l.TipoOperacion == tipo && l.ReferenciaId == referenciaId)
+                .OrderBy(l => l.FechaCambio)
+                .Select(l => new LogEstadoOperacionDto
+                {
+                    LogId = l.LogId,
+                    EstadoAnterior = l.EstadoAnterior,
+                    EstadoNuevo = l.EstadoNuevo,
+                    FechaCambio = l.FechaCambio,
+                    Motivo = l.Motivo,
+                    CantidadAfectada = l.CantidadAfectada
+                })
+                .ToListAsync();
         }
     }
 }

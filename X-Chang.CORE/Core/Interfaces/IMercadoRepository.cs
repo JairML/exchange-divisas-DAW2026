@@ -4,6 +4,7 @@ namespace X_Chang.CORE.Core.Interfaces
 {
     public interface IMercadoRepository
     {
+        Task<List<LogEstadoOperacionDto>> GetEstadosOperacionAsync(string tipo, int referenciaId);
         Task<OperacionesActivasResponseDto> ObtenerOperacionesActivasAsync(int usuarioId, FiltroOperacionesActivasDto filtro);
         Task<LibroOrdenesDto> ObtenerLibroOrdenesAsync(int parMonedaId, bool verTodasOrdenes, bool verTodasOfertas);
         Task<ResumenOrdenCompraDto> ObtenerResumenOrdenCompraAsync(int usuarioId, CrearOrdenCompraRequestDto request);

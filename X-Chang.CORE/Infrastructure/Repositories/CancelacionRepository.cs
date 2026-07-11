@@ -4,8 +4,8 @@ using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using X_Chang.CORE.Core.Entities;
 using X_Chang.CORE.Core.Interfaces;
-using X_Chang.CORE.Infrastructure.Shared;
 using X_Chang.CORE.Infrastructure.Data;
+using X_Chang.CORE.Infrastructure.Shared;
 
 namespace X_Chang.CORE.Infrastructure.Repositories
 {
@@ -77,10 +77,20 @@ namespace X_Chang.CORE.Infrastructure.Repositories
                     return null;
                 }
 
+                var estadoAnteriorOrden = orden.Estado;
                 orden.Estado = "Cancelada";
                 orden.FechaCancelacion = ahora;
                 orden.FechaActualizacion = ahora;
                 ordenCompraId = orden.OrdenCompraId;
+                _context.LogEstadosOperacion.Add(new LogEstadosOperacion
+                {
+                    TipoOperacion = "OrdenCompra",
+                    ReferenciaId = orden.OrdenCompraId,
+                    EstadoAnterior = estadoAnteriorOrden,
+                    EstadoNuevo = "Cancelada",
+                    FechaCambio = ahora,
+                    Motivo = "Cancelación"
+                });
 
                 var ofertaEspejo = await _context.OfertasVenta
                     .FirstOrDefaultAsync(o => o.OrdenCompraEspejoId == orden.OrdenCompraId);
@@ -106,10 +116,20 @@ namespace X_Chang.CORE.Infrastructure.Repositories
                     return null;
                 }
 
+                var estadoAnteriorOferta = oferta.Estado;
                 oferta.Estado = "Cancelada";
                 oferta.FechaCancelacion = ahora;
                 oferta.FechaActualizacion = ahora;
                 ofertaVentaId = oferta.OfertaVentaId;
+                _context.LogEstadosOperacion.Add(new LogEstadosOperacion
+                {
+                    TipoOperacion = "OfertaVenta",
+                    ReferenciaId = oferta.OfertaVentaId,
+                    EstadoAnterior = estadoAnteriorOferta,
+                    EstadoNuevo = "Cancelada",
+                    FechaCambio = ahora,
+                    Motivo = "Cancelación"
+                });
 
                 if (oferta.OrdenCompraEspejoId != null)
                 {

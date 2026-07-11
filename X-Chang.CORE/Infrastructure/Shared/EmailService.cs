@@ -39,7 +39,9 @@ public class EmailService : IEmailService
             sender = new { name = _brevo.NombreRemitente, email = _brevo.CorreoRemitente },
             to = new[] { new { email = destinatario } },
             subject = asunto,
-            htmlContent = ConstruirHtml(cuerpo, adjuntos)
+            htmlContent = ConstruirHtml(cuerpo, adjuntos),
+            trackClicks = false,
+            trackOpens = false
         };
 
         using var request = new HttpRequestMessage(HttpMethod.Post, RutaEnvioCorreo)

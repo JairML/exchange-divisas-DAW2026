@@ -41,6 +41,8 @@ public partial class ExchangeDivisasDbContext : DbContext
 
     public virtual DbSet<HistoricoPreciosPar> HistoricoPreciosPar { get; set; }
 
+    public virtual DbSet<LogEstadosOperacion> LogEstadosOperacion { get; set; }
+
     public virtual DbSet<MetodosPago> MetodosPago { get; set; }
 
     public virtual DbSet<MetodosPagoPais> MetodosPagoPais { get; set; }
@@ -392,6 +394,22 @@ public partial class ExchangeDivisasDbContext : DbContext
                 .HasForeignKey(d => d.ParMonedaId)
                 .OnDelete(DeleteBehavior.Cascade)
                 .HasConstraintName("historicopreciospar_parmonedaid_fkey");
+        });
+
+        modelBuilder.Entity<LogEstadosOperacion>(entity =>
+        {
+            entity.ToTable("logestadosoperacion");
+            entity.HasKey(e => e.LogId);
+            entity.Property(e => e.LogId).HasColumnName("logid").UseIdentityAlwaysColumn();
+            entity.Property(e => e.TipoOperacion).HasColumnName("tipooperacion").HasMaxLength(20).IsRequired();
+            entity.Property(e => e.ReferenciaId).HasColumnName("referenciaid");
+            entity.Property(e => e.EstadoAnterior).HasColumnName("estadoanterior").HasMaxLength(30);
+            entity.Property(e => e.EstadoNuevo).HasColumnName("estadonuevo").HasMaxLength(30).IsRequired();
+            entity.Property(e => e.FechaCambio).HasColumnName("fechacambio");
+            entity.Property(e => e.Motivo).HasColumnName("motivo").HasMaxLength(100);
+            entity.Property(e => e.CantidadAfectada).HasColumnName("cantidadafectada").HasColumnType("decimal(28, 8)");
+            entity.HasIndex(e => new { e.TipoOperacion, e.ReferenciaId })
+                  .HasDatabaseName("ix_logestados_tipo_ref");
         });
 
         modelBuilder.Entity<MetodosPago>(entity =>
