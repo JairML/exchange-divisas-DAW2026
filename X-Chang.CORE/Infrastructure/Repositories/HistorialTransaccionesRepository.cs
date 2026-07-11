@@ -19,6 +19,7 @@ namespace X_Chang.CORE.Infrastructure.Repositories
             int usuarioId, DateTime? fechaDesde, DateTime? fechaHasta, int pagina, int registrosPorPagina)
         {
             var query = _context.OrdenesCompra
+                .AsNoTracking()
                 .Include(o => o.ParMoneda)
                     .ThenInclude(p => p.MonedaOrigen)
                 .Include(o => o.ParMoneda)
@@ -58,6 +59,7 @@ namespace X_Chang.CORE.Infrastructure.Repositories
             int usuarioId, DateTime? fechaDesde, DateTime? fechaHasta, int pagina, int registrosPorPagina)
         {
             var query = _context.OfertasVenta
+                .AsNoTracking()
                 .Include(o => o.ParMoneda)
                     .ThenInclude(p => p.MonedaOrigen)
                 .Include(o => o.ParMoneda)
@@ -97,6 +99,7 @@ namespace X_Chang.CORE.Infrastructure.Repositories
             int usuarioId, DateTime? fechaDesde, DateTime? fechaHasta, int pagina, int registrosPorPagina)
         {
             var query = _context.OperacionesInmediatas
+                .AsNoTracking()
                 .Include(o => o.ParMoneda)
                     .ThenInclude(p => p.MonedaOrigen)
                 .Include(o => o.ParMoneda)
@@ -133,6 +136,7 @@ namespace X_Chang.CORE.Infrastructure.Repositories
             int usuarioId, DateTime? fechaDesde, DateTime? fechaHasta, int pagina, int registrosPorPagina)
         {
             var query = _context.OperacionesInmediatas
+                .AsNoTracking()
                 .Include(o => o.ParMoneda)
                     .ThenInclude(p => p.MonedaOrigen)
                 .Include(o => o.ParMoneda)
@@ -169,6 +173,7 @@ namespace X_Chang.CORE.Infrastructure.Repositories
             int usuarioId, DateTime? fechaDesde, DateTime? fechaHasta, int pagina, int registrosPorPagina)
         {
             var query = _context.Depositos
+                .AsNoTracking()
                 .Include(d => d.Moneda)
                 .Include(d => d.MetodoPago)
                 .Where(d => d.UsuarioId == usuarioId)
@@ -204,6 +209,7 @@ namespace X_Chang.CORE.Infrastructure.Repositories
             int usuarioId, DateTime? fechaDesde, DateTime? fechaHasta, int pagina, int registrosPorPagina)
         {
             var query = _context.Retiros
+                .AsNoTracking()
                 .Include(r => r.Moneda)
                 .Include(r => r.MetodoPago)
                 .Where(r => r.UsuarioId == usuarioId)

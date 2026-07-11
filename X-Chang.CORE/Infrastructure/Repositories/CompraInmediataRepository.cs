@@ -43,7 +43,10 @@ namespace X_Chang.CORE.Infrastructure.Repositories
                 .Where(o =>
                     o.ParMonedaId == parMonedaId &&
                     o.CantidadPendiente > 0 &&
-                    (o.Estado == "Activa" || o.Estado == "Parcialmente ejecutada"))
+                    (o.Estado == "Activa" || o.Estado == "Parcialmente ejecutada") &&
+                    !(o.OrdenCompraEspejoId != null &&
+                      !_context.MovimientosBilletera.Any(m => m.ReferenciaId == o.OfertaVentaId &&
+                        (m.ReferenciaTipo == "OfertaVenta" || m.ReferenciaTipo == "ofertasventa"))))
                 .OrderBy(o => o.PrecioUnitario)
                 .ThenBy(o => o.FechaCreacion)
                 .ToListAsync();

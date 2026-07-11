@@ -82,6 +82,14 @@ namespace X_Chang.CORE.Core.Services
                 destinoSecundario = origenPrincipal;
             }
 
+            // Evita mostrar dos veces el mismo par en el menú principal. La HU indica
+            // que, cuando no hay otro par relevante, se muestre el par inverso.
+            if (origenSecundario == origenPrincipal && destinoSecundario == destinoPrincipal)
+            {
+                origenSecundario = destinoPrincipal;
+                destinoSecundario = origenPrincipal;
+            }
+
             var serieSecundaria = await ObtenerSeriePorCodigos(origenSecundario, destinoSecundario, null);
 
             var graficoSecundario = new GraficoPreciosParDto
@@ -100,8 +108,8 @@ namespace X_Chang.CORE.Core.Services
         }
 
         public async Task<ParesMonedaPaginadoDto> ObtenerListadoParesAsync(
-    int? usuarioId,
-    FiltroParesMonedaDto filtro)
+            int? usuarioId,
+            FiltroParesMonedaDto filtro)
         {
             var monedas = await _repo.ObtenerMonedasSoportadasAsync();
 
@@ -134,8 +142,8 @@ namespace X_Chang.CORE.Core.Services
                 .ToArray();
 
             var todos = filtro.ColapsarParesInversos
-                ? BuildPares351(codesDisponibles, monedasPorIso, paresPorIds, preciosCompra, preciosVenta)
-                : BuildPares702(codesDisponibles, monedasPorIso, paresPorIds, preciosCompra, preciosVenta);
+                ? BuildParesColapsados(codesDisponibles, monedasPorIso, paresPorIds, preciosCompra, preciosVenta)
+                : BuildParesDirigidos(codesDisponibles, monedasPorIso, paresPorIds, preciosCompra, preciosVenta);
 
             if (!string.IsNullOrWhiteSpace(filtro.MonedaEntrega) &&
                 filtro.MonedaEntrega != "Cualquiera")
@@ -239,9 +247,7 @@ namespace X_Chang.CORE.Core.Services
                 ? pv
                 : null;
 
-            decimal? margenActual = mayorActual.HasValue && menorActual.HasValue
-                ? menorActual.Value - mayorActual.Value
-                : null;
+            decimal? margenActual = CalcularMargen(mayorActual, menorActual);
 
             var desde = ComputarDesde(rango);
 
@@ -282,7 +288,7 @@ namespace X_Chang.CORE.Core.Services
             return await _repo.ObtenerSerieHistoricaAsync(parId.Value, desde);
         }
 
-        private static List<ParMonedaListadoDto> BuildPares702(
+        private static List<ParMonedaListadoDto> BuildParesDirigidos(
             string[] codes,
             Dictionary<string, int> monedasPorIso,
             Dictionary<(int, int), int> paresPorIds,
@@ -311,7 +317,7 @@ namespace X_Chang.CORE.Core.Services
             return result;
         }
 
-        private static List<ParMonedaListadoDto> BuildPares351(
+        private static List<ParMonedaListadoDto> BuildParesColapsados(
             string[] codes,
             Dictionary<string, int> monedasPorIso,
             Dictionary<(int, int), int> paresPorIds,
@@ -358,10 +364,6 @@ namespace X_Chang.CORE.Core.Services
                         }
                     }
 
-                    decimal? margen = mayorCompra.HasValue && menorVenta.HasValue
-                        ? mayorCompra.Value - menorVenta.Value
-                        : null;
-
                     result.Add(new ParMonedaListadoDto
                     {
                         ParMonedaId = parIdValue,
@@ -369,7 +371,7 @@ namespace X_Chang.CORE.Core.Services
                         MonedaObtiene = b,
                         MayorPrecioCompra = mayorCompra,
                         MenorPrecioVenta = menorVenta,
-                        Margen = margen
+                        Margen = CalcularMargen(mayorCompra, menorVenta)
                     });
                 }
             }
@@ -402,10 +404,6 @@ namespace X_Chang.CORE.Core.Services
                     menorVenta = v;
             }
 
-            decimal? margen = mayorCompra.HasValue && menorVenta.HasValue
-                ? mayorCompra.Value - menorVenta.Value
-                : null;
-
             return new ParMonedaListadoDto
             {
                 ParMonedaId = parIdValue,
@@ -413,8 +411,15 @@ namespace X_Chang.CORE.Core.Services
                 MonedaObtiene = destino,
                 MayorPrecioCompra = mayorCompra,
                 MenorPrecioVenta = menorVenta,
-                Margen = margen
+                Margen = CalcularMargen(mayorCompra, menorVenta)
             };
+        }
+
+        private static decimal? CalcularMargen(decimal? mayorCompra, decimal? menorVenta)
+        {
+            return mayorCompra.HasValue && menorVenta.HasValue
+                ? menorVenta.Value - mayorCompra.Value
+                : null;
         }
 
         private static List<ParMonedaListadoDto> Ordenar(

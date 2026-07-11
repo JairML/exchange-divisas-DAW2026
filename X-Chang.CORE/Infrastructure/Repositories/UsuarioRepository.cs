@@ -1,4 +1,4 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using System;
 using System.Collections.Generic;
 using System.Text;
@@ -20,6 +20,8 @@ namespace X_Chang.CORE.Infrastructure.Repositories
         public async Task<Usuarios?> ObtenerPorIdAsync(int usuarioId)
         {
             return await _context.Usuarios
+                .Include(u => u.Pais)
+                .Include(u => u.Rol)
                 .FirstOrDefaultAsync(u => u.UsuarioId == usuarioId);
         }
 

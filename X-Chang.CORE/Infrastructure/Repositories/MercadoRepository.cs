@@ -29,12 +29,18 @@ namespace X_Chang.CORE.Infrastructure.Repositories
             var ordenesQuery = _context.OrdenesCompra
                 .Include(o => o.ParMoneda).ThenInclude(p => p.MonedaOrigen)
                 .Include(o => o.ParMoneda).ThenInclude(p => p.MonedaDestino)
-                .Where(o => o.UsuarioId == usuarioId && EstadosActivos.Contains(o.Estado));
+                .Where(o => o.UsuarioId == usuarioId && EstadosActivos.Contains(o.Estado)
+                    && !(_context.OfertasVenta.Any(v => v.OrdenCompraEspejoId == o.OrdenCompraId)
+                        && !_context.MovimientosBilletera.Any(m => m.ReferenciaId == o.OrdenCompraId
+                            && (m.ReferenciaTipo == "OrdenCompra" || m.ReferenciaTipo == "ordenescompra"))));
 
             var ofertasQuery = _context.OfertasVenta
                 .Include(o => o.ParMoneda).ThenInclude(p => p.MonedaOrigen)
                 .Include(o => o.ParMoneda).ThenInclude(p => p.MonedaDestino)
-                .Where(o => o.UsuarioId == usuarioId && EstadosActivos.Contains(o.Estado));
+                .Where(o => o.UsuarioId == usuarioId && EstadosActivos.Contains(o.Estado)
+                    && !(o.OrdenCompraEspejoId != null
+                        && !_context.MovimientosBilletera.Any(m => m.ReferenciaId == o.OfertaVentaId
+                            && (m.ReferenciaTipo == "OfertaVenta" || m.ReferenciaTipo == "ofertasventa"))));
 
             if (filtro.FechaDesde.HasValue)
             {
@@ -130,10 +136,20 @@ namespace X_Chang.CORE.Infrastructure.Repositories
             if (par == null)
                 throw new ArgumentException("El par de monedas no existe.");
 
-            var ordenesQuery = _context.OrdenesCompra
-                .Where(o => o.ParMonedaId == parMonedaId && o.CantidadPendiente > 0 && EstadosActivos.Contains(o.Estado))
-                .OrderByDescending(o => o.PrecioUnitario)
-                .ThenBy(o => o.FechaCreacion)
+            var parInversoId = await _context.ParesMoneda
+                .Where(p => p.MonedaOrigenId == par.MonedaDestinoId
+                    && p.MonedaDestinoId == par.MonedaOrigenId
+                    && p.Activo)
+                .Select(p => (int?)p.ParMonedaId)
+                .FirstOrDefaultAsync();
+
+            var ordenesDirectas = await _context.OrdenesCompra
+                .Where(o => o.ParMonedaId == parMonedaId
+                    && o.CantidadPendiente > 0
+                    && EstadosActivos.Contains(o.Estado)
+                    && !(_context.OfertasVenta.Any(v => v.OrdenCompraEspejoId == o.OrdenCompraId)
+                        && !_context.MovimientosBilletera.Any(m => m.ReferenciaId == o.OrdenCompraId
+                            && (m.ReferenciaTipo == "OrdenCompra" || m.ReferenciaTipo == "ordenescompra"))))
                 .Select(o => new LibroOrdenesRegistroDto
                 {
                     Id = o.OrdenCompraId,
@@ -142,12 +158,16 @@ namespace X_Chang.CORE.Infrastructure.Repositories
                     PrecioUnitario = o.PrecioUnitario,
                     Total = o.CantidadPendiente * o.PrecioUnitario,
                     Estado = o.Estado
-                });
+                })
+                .ToListAsync();
 
-            var ofertasQuery = _context.OfertasVenta
-                .Where(o => o.ParMonedaId == parMonedaId && o.CantidadPendiente > 0 && EstadosActivos.Contains(o.Estado))
-                .OrderBy(o => o.PrecioUnitario)
-                .ThenBy(o => o.FechaCreacion)
+            var ofertasDirectas = await _context.OfertasVenta
+                .Where(o => o.ParMonedaId == parMonedaId
+                    && o.CantidadPendiente > 0
+                    && EstadosActivos.Contains(o.Estado)
+                    && !(o.OrdenCompraEspejoId != null
+                        && !_context.MovimientosBilletera.Any(m => m.ReferenciaId == o.OfertaVentaId
+                            && (m.ReferenciaTipo == "OfertaVenta" || m.ReferenciaTipo == "ofertasventa"))))
                 .Select(o => new LibroOrdenesRegistroDto
                 {
                     Id = o.OfertaVentaId,
@@ -156,10 +176,71 @@ namespace X_Chang.CORE.Infrastructure.Repositories
                     PrecioUnitario = o.PrecioUnitario,
                     Total = o.CantidadPendiente * o.PrecioUnitario,
                     Estado = o.Estado
-                });
+                })
+                .ToListAsync();
 
-            var ordenes = await (verTodasOrdenes ? ordenesQuery : ordenesQuery.Take(10)).ToListAsync();
-            var ofertas = await (verTodasOfertas ? ofertasQuery : ofertasQuery.Take(10)).ToListAsync();
+            var ordenesVirtualesDesdeOfertasInversas = new List<LibroOrdenesRegistroDto>();
+            var ofertasVirtualesDesdeOrdenesInversas = new List<LibroOrdenesRegistroDto>();
+
+            if (parInversoId.HasValue)
+            {
+                // Una oferta de venta en el par inverso equivale, para este par,
+                // a una orden de compra visible con precio invertido. No se crea fila espejo.
+                ordenesVirtualesDesdeOfertasInversas = await _context.OfertasVenta
+                    .Where(o => o.ParMonedaId == parInversoId.Value
+                        && o.CantidadPendiente > 0
+                        && o.PrecioUnitario > 0
+                        && EstadosActivos.Contains(o.Estado)
+                        && !(o.OrdenCompraEspejoId != null
+                        && !_context.MovimientosBilletera.Any(m => m.ReferenciaId == o.OfertaVentaId
+                            && (m.ReferenciaTipo == "OfertaVenta" || m.ReferenciaTipo == "ofertasventa"))))
+                    .Select(o => new LibroOrdenesRegistroDto
+                    {
+                        Id = -o.OfertaVentaId,
+                        FechaCreacion = o.FechaCreacion,
+                        Cantidad = o.CantidadPendiente * o.PrecioUnitario,
+                        PrecioUnitario = 1 / o.PrecioUnitario,
+                        Total = o.CantidadPendiente,
+                        Estado = o.Estado
+                    })
+                    .ToListAsync();
+
+                // Una orden de compra en el par inverso equivale, para este par,
+                // a una oferta de venta visible con precio invertido. No se crea fila espejo.
+                ofertasVirtualesDesdeOrdenesInversas = await _context.OrdenesCompra
+                    .Where(o => o.ParMonedaId == parInversoId.Value
+                        && o.CantidadPendiente > 0
+                        && o.PrecioUnitario > 0
+                        && EstadosActivos.Contains(o.Estado)
+                        && !(_context.OfertasVenta.Any(v => v.OrdenCompraEspejoId == o.OrdenCompraId)
+                        && !_context.MovimientosBilletera.Any(m => m.ReferenciaId == o.OrdenCompraId
+                            && (m.ReferenciaTipo == "OrdenCompra" || m.ReferenciaTipo == "ordenescompra"))))
+                    .Select(o => new LibroOrdenesRegistroDto
+                    {
+                        Id = -o.OrdenCompraId,
+                        FechaCreacion = o.FechaCreacion,
+                        Cantidad = o.CantidadPendiente * o.PrecioUnitario,
+                        PrecioUnitario = 1 / o.PrecioUnitario,
+                        Total = o.CantidadPendiente,
+                        Estado = o.Estado
+                    })
+                    .ToListAsync();
+            }
+
+            var ordenesQuery = ordenesDirectas
+                .Concat(ordenesVirtualesDesdeOfertasInversas)
+                .OrderByDescending(o => o.PrecioUnitario)
+                .ThenBy(o => o.FechaCreacion)
+                .ToList();
+
+            var ofertasQuery = ofertasDirectas
+                .Concat(ofertasVirtualesDesdeOrdenesInversas)
+                .OrderBy(o => o.PrecioUnitario)
+                .ThenBy(o => o.FechaCreacion)
+                .ToList();
+
+            var ordenes = verTodasOrdenes ? ordenesQuery : ordenesQuery.Take(10).ToList();
+            var ofertas = verTodasOfertas ? ofertasQuery : ofertasQuery.Take(10).ToList();
 
             return new LibroOrdenesDto
             {
@@ -353,7 +434,7 @@ namespace X_Chang.CORE.Infrastructure.Repositories
 
             orden.Estado = orden.CantidadPendiente <= 0 ? "Completada" : orden.CantidadObtenida > 0 ? "Parcialmente ejecutada" : "Activa";
             var montoReembolsado = await AjustarReservaOrdenYReembolsarMejorPrecioAsync(orden, par.MonedaOrigenId, ahora);
-            var ofertaEspejoId = await CrearOfertaEspejoSiOrdenQuedoPendienteAsync(orden, par, ahora);
+            int? ofertaEspejoId = null;
 
             _context.HistorialTransacciones.Add(new HistorialTransacciones
             {
@@ -570,7 +651,7 @@ namespace X_Chang.CORE.Infrastructure.Repositories
             }
 
             oferta.Estado = oferta.CantidadPendiente <= 0 ? "Completada" : oferta.CantidadVendida > 0 ? "Parcialmente ejecutada" : "Activa";
-            var ordenEspejoId = await CrearOrdenEspejoSiOfertaQuedoPendienteAsync(oferta, par, ahora);
+            int? ordenEspejoId = null;
 
             _context.HistorialTransacciones.Add(new HistorialTransacciones
             {
@@ -699,36 +780,12 @@ namespace X_Chang.CORE.Infrastructure.Repositories
                 .OrderByDescending(x => x.VolumenOperado)
                 .ToListAsync();
 
-            var mejoresRutas = await _context.RutasConversion
-                .Include(r => r.MonedaInicial)
-                .Include(r => r.MonedaFinal)
-                .Include(r => r.RutaConversionSaltos).ThenInclude(s => s.MonedaOrigen)
-                .Include(r => r.RutaConversionSaltos).ThenInclude(s => s.MonedaDestino)
-                .Where(r => r.FechaCreacion >= desde && r.FechaCreacion < hastaExclusivo)
-                .OrderByDescending(r => r.FechaCreacion)
-                .Take(50)
-                .Select(r => new MejorRutaAdminDto
-                {
-                    FechaCreacion = r.FechaCreacion,
-                    MonedaInicial = r.MonedaInicial.CodigoIso,
-                    MonedaFinal = r.MonedaFinal.CodigoIso,
-                    CantidadSaltos = r.CantidadSaltos,
-                    AhorroEstimado = r.AhorroEstimado,
-                    GananciaEstimada = r.GananciaEstimada,
-                    Saltos = r.RutaConversionSaltos
-                        .OrderBy(s => s.NumeroSalto)
-                        .Select(s => new SaltoMejorRutaAdminDto
-                        {
-                            NumeroSalto = s.NumeroSalto,
-                            Par = s.MonedaOrigen.CodigoIso + "/" + s.MonedaDestino.CodigoIso,
-                            CantidadConvertida = s.CantidadConvertida,
-                            PrecioMinimo = s.PrecioMinimo,
-                            PrecioMaximo = s.PrecioMaximo,
-                            PrecioPromedio = s.PrecioPromedio,
-                            ResultadoObtenido = s.ResultadoObtenido
-                        }).ToList()
-                })
-                .ToListAsync();
+            // US-019 exige métricas generales, volumen por día y operaciones por día.
+            // Las rutas de conversión no forman parte del panel principal y, además, el esquema
+            // móvil base usa columnas heredadas distintas para rutaconversionsaltos. Para evitar
+            // que el panel administrativo dependa de columnas no necesarias, se dejan fuera del
+            // resumen y se consultan únicamente desde los flujos de compra/venta por ruta.
+            var mejoresRutas = new List<MejorRutaAdminDto>();
 
             return new PanelAdministrativoDto
             {
@@ -979,96 +1036,30 @@ namespace X_Chang.CORE.Infrastructure.Repositories
             return reembolso > 0 ? reembolso : 0m;
         }
 
-        private async Task<int?> CrearOfertaEspejoSiOrdenQuedoPendienteAsync(OrdenesCompra orden, ParesMoneda par, DateTime fecha)
+        private Task<int?> CrearOfertaEspejoSiOrdenQuedoPendienteAsync(OrdenesCompra orden, ParesMoneda par, DateTime fecha)
         {
-            if (orden.CantidadPendiente <= 0)
-                return null;
-
-            var inverso = await ObtenerParInversoAsync(par);
-            var cantidadOrigenReservada = orden.CantidadPendiente * orden.PrecioUnitario;
-
-            var espejo = new OfertasVenta
-            {
-                UsuarioId = orden.UsuarioId,
-                ParMonedaId = inverso.ParMonedaId,
-                CantidadOriginal = cantidadOrigenReservada,
-                CantidadVendida = 0,
-                CantidadPendiente = cantidadOrigenReservada,
-                PrecioUnitario = 1 / orden.PrecioUnitario,
-                TotalEsperado = orden.CantidadPendiente,
-                TotalRecibido = 0,
-                Estado = orden.Estado,
-                FechaCreacion = fecha,
-                FechaActualizacion = fecha,
-                OrdenCompraEspejoId = orden.OrdenCompraId
-            };
-
-            _context.OfertasVenta.Add(espejo);
-            await _context.SaveChangesAsync();
-            return espejo.OfertaVentaId;
+            // La versión alineada con Supabase no crea filas espejo físicas.
+            // La simetría se interpreta al leer el libro de órdenes con precio invertido.
+            return Task.FromResult<int?>(null);
         }
 
-        private async Task<int?> CrearOrdenEspejoSiOfertaQuedoPendienteAsync(OfertasVenta oferta, ParesMoneda par, DateTime fecha)
+        private Task<int?> CrearOrdenEspejoSiOfertaQuedoPendienteAsync(OfertasVenta oferta, ParesMoneda par, DateTime fecha)
         {
-            if (oferta.CantidadPendiente <= 0)
-                return null;
-
-            var inverso = await ObtenerParInversoAsync(par);
-            var cantidadOrigenEsperada = oferta.CantidadPendiente * oferta.PrecioUnitario;
-
-            var ordenEspejo = new OrdenesCompra
-            {
-                UsuarioId = oferta.UsuarioId,
-                ParMonedaId = inverso.ParMonedaId,
-                CantidadOriginal = cantidadOrigenEsperada,
-                CantidadObtenida = 0,
-                CantidadPendiente = cantidadOrigenEsperada,
-                PrecioUnitario = 1 / oferta.PrecioUnitario,
-                TotalComprometido = oferta.CantidadPendiente,
-                TotalEjecutado = 0,
-                Estado = oferta.Estado,
-                FechaCreacion = fecha,
-                FechaActualizacion = fecha
-            };
-
-            _context.OrdenesCompra.Add(ordenEspejo);
-            await _context.SaveChangesAsync();
-
-            oferta.OrdenCompraEspejoId = ordenEspejo.OrdenCompraId;
-            return ordenEspejo.OrdenCompraId;
+            // La versión alineada con Supabase no crea filas espejo físicas.
+            // La simetría se interpreta al leer el libro de órdenes con precio invertido.
+            return Task.FromResult<int?>(null);
         }
 
-        private async Task SincronizarOrdenEspejoExactaDesdeOfertaAsync(OfertasVenta oferta)
+        private Task SincronizarOrdenEspejoExactaDesdeOfertaAsync(OfertasVenta oferta)
         {
-            if (oferta.OrdenCompraEspejoId == null)
-                return;
-
-            var orden = await _context.OrdenesCompra.FirstOrDefaultAsync(o => o.OrdenCompraId == oferta.OrdenCompraEspejoId.Value);
-            if (orden == null)
-                return;
-
-            orden.CantidadOriginal = oferta.TotalRecibido + (oferta.CantidadPendiente * oferta.PrecioUnitario);
-            orden.CantidadObtenida = oferta.TotalRecibido;
-            orden.CantidadPendiente = oferta.CantidadPendiente * oferta.PrecioUnitario;
-            orden.TotalComprometido = oferta.CantidadOriginal;
-            orden.TotalEjecutado = oferta.CantidadVendida;
-            orden.Estado = oferta.Estado;
-            orden.FechaActualizacion = DateTime.Now;
+            // No se sincronizan filas espejo físicas: se evita doble liquidez y desfaces.
+            return Task.CompletedTask;
         }
 
-        private async Task SincronizarOfertaEspejoExactaDesdeOrdenAsync(OrdenesCompra orden)
+        private Task SincronizarOfertaEspejoExactaDesdeOrdenAsync(OrdenesCompra orden)
         {
-            var oferta = await _context.OfertasVenta.FirstOrDefaultAsync(o => o.OrdenCompraEspejoId == orden.OrdenCompraId);
-            if (oferta == null)
-                return;
-
-            oferta.CantidadOriginal = orden.TotalComprometido;
-            oferta.CantidadVendida = orden.TotalEjecutado;
-            oferta.CantidadPendiente = Math.Max(0, orden.TotalComprometido - orden.TotalEjecutado);
-            oferta.TotalEsperado = orden.CantidadOriginal;
-            oferta.TotalRecibido = orden.CantidadObtenida;
-            oferta.Estado = orden.Estado;
-            oferta.FechaActualizacion = DateTime.Now;
+            // No se sincronizan filas espejo físicas: se evita doble liquidez y desfaces.
+            return Task.CompletedTask;
         }
 
         private async Task CrearNotificacionAsync(int usuarioId, string tipoEvento, string asunto, string cuerpo, string referenciaTipo, int referenciaId)
