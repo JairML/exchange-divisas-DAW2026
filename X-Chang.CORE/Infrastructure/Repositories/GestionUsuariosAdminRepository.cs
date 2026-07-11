@@ -1,4 +1,4 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using X_Chang.CORE.Core.DTOs.GestionUsuarios;
 using X_Chang.CORE.Core.Entities;
 using X_Chang.CORE.Core.Interfaces;
@@ -21,13 +21,14 @@ namespace X_Chang.CORE.Infrastructure.Repositories
                 .AnyAsync(u =>
                     u.UsuarioId == usuarioId &&
                     u.Estado == "Activo" &&
-                    u.Rol.Nombre == "Administrador");
+                    (u.Rol.Nombre == "ADM" || u.Rol.Nombre == "Administrador"));
         }
 
         public async Task<List<UsuarioAdminResumenDto>> BuscarUsuariosAsync(FiltroUsuariosAdminDto filtro)
         {
             var query = _context.Usuarios
                 .Include(u => u.Pais)
+                .Include(u => u.Rol)
                 .AsQueryable();
 
             if (!string.IsNullOrWhiteSpace(filtro.NombreUsuario))
@@ -54,6 +55,8 @@ namespace X_Chang.CORE.Infrastructure.Repositories
                     CorreoElectronico = u.CorreoElectronico,
                     PaisResidencia = u.Pais.Nombre,
                     Estado = u.Estado,
+                    Rol = u.Rol.Nombre,
+                    EsAdministrador = u.Rol.Nombre == "ADM" || u.Rol.Nombre == "Administrador",
                     TextoBotonAccion = u.Estado == "Activo" ? "Restringir" : "Habilitar"
                 })
                 .ToListAsync();
@@ -63,6 +66,7 @@ namespace X_Chang.CORE.Infrastructure.Repositories
         {
             var usuario = await _context.Usuarios
                 .Include(u => u.Pais)
+                .Include(u => u.Rol)
                 .Include(u => u.Billeteras)
                     .ThenInclude(b => b.SaldosBilletera)
                         .ThenInclude(s => s.Moneda)
@@ -96,6 +100,22 @@ namespace X_Chang.CORE.Infrastructure.Repositories
                 })
                 .ToListAsync();
 
+            var historialRestricciones = await _context.RestriccionesUsuario
+                .Include(r => r.Administrador)
+                .Where(r => r.UsuarioId == usuarioId)
+                .OrderByDescending(r => r.FechaInicio)
+                .Select(r => new HistorialRestriccionAdminDto
+                {
+                    RestriccionId = r.RestriccionId,
+                    TipoAccion = r.TipoAccion,
+                    Mensaje = r.Mensaje,
+                    FechaInicio = r.FechaInicio,
+                    FechaFin = r.FechaFin,
+                    EstadoRestriccion = r.EstadoRestriccion,
+                    Administrador = r.Administrador.NombreUsuario
+                })
+                .ToListAsync();
+
             return new UsuarioAdminDetalleDto
             {
                 UsuarioId = usuario.UsuarioId,
@@ -103,6 +123,8 @@ namespace X_Chang.CORE.Infrastructure.Repositories
                 CorreoElectronico = usuario.CorreoElectronico,
                 PaisResidencia = usuario.Pais.Nombre,
                 Estado = usuario.Estado,
+                Rol = usuario.Rol.Nombre,
+                EsAdministrador = usuario.Rol.Nombre == "ADM" || usuario.Rol.Nombre == "Administrador",
                 Saldos = usuario.Billeteras?.SaldosBilletera
                     .OrderBy(s => s.Moneda.CodigoIso)
                     .Select(s => new SaldoUsuarioAdminDto
@@ -113,7 +135,8 @@ namespace X_Chang.CORE.Infrastructure.Repositories
                         SaldoDisponible = s.SaldoDisponible
                     })
                     .ToList() ?? new List<SaldoUsuarioAdminDto>(),
-                HistorialTransacciones = historial
+                HistorialTransacciones = historial,
+                HistorialRestricciones = historialRestricciones
             };
         }
 
@@ -134,7 +157,7 @@ namespace X_Chang.CORE.Infrastructure.Repositories
             if (usuario.UsuarioId == administradorId)
                 throw new InvalidOperationException("El administrador no puede restringirse a sí mismo.");
 
-            if (usuario.Rol.Nombre == "Administrador")
+            if (usuario.Rol.Nombre == "ADM" || usuario.Rol.Nombre == "Administrador")
                 throw new InvalidOperationException("No es posible restringir una cuenta de administrador.");
 
             if (usuario.Estado == "Restringido")
@@ -197,10 +220,17 @@ namespace X_Chang.CORE.Infrastructure.Repositories
             using var transaction = await _context.Database.BeginTransactionAsync();
 
             var usuario = await _context.Usuarios
+                .Include(u => u.Rol)
                 .FirstOrDefaultAsync(u => u.UsuarioId == usuarioId);
 
             if (usuario == null)
                 throw new ArgumentException("El usuario no existe.");
+
+            if (usuario.UsuarioId == administradorId)
+                throw new InvalidOperationException("El administrador no puede habilitarse a sí mismo.");
+
+            if (usuario.Rol.Nombre == "ADM" || usuario.Rol.Nombre == "Administrador")
+                throw new InvalidOperationException("No es posible habilitar una cuenta de administrador desde esta opción.");
 
             if (usuario.Estado == "Activo")
                 throw new InvalidOperationException("El usuario ya está activo.");

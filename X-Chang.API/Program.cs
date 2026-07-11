@@ -11,6 +11,8 @@ using X_Chang.CORE.Infrastructure.Repositories;
 using X_Chang.CORE.Infrastructure.Shared;
 using X_Chang.CORE.Services;
 
+AppContext.SetSwitch("Npgsql.EnableLegacyTimestampBehavior", true);
+
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddCors(options =>
@@ -25,9 +27,10 @@ builder.Services.AddControllers();
 builder.Services.AddOpenApi();
 
 builder.Services.AddDbContext<ExchangeDivisasDbContext>(options =>
-    options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
+    options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
 
 builder.Services.Configure<SessionSettings>(builder.Configuration.GetSection("SessionSettings"));
+builder.Services.Configure<GroqSettings>(builder.Configuration.GetSection("Groq"));
 builder.Services.AddScoped<IAuthRepository, AuthRepository>();
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddAuthentication("Session")
@@ -67,6 +70,7 @@ builder.Services.AddScoped<ICompraInmediataService, CompraInmediataService>();
 builder.Services.AddScoped<IDepositoRepository, DepositoRepository>();
 builder.Services.AddScoped<IDepositoService, DepositoService>();
 builder.Services.AddScoped<IGestionUsuariosAdminRepository, GestionUsuariosAdminRepository>();
+builder.Services.AddHttpClient<IAdminMensajeIaService, GroqAdminMensajeIaService>();
 builder.Services.AddScoped<IGestionUsuariosAdminService, GestionUsuariosAdminService>();
 builder.Services.AddScoped<IVentaInmediataRepository, VentaInmediataRepository>();
 builder.Services.AddScoped<IVentaInmediataService, VentaInmediataService>();
@@ -74,6 +78,7 @@ builder.Services.AddScoped<IRetiroRepository, RetiroRepository>();
 builder.Services.AddScoped<IRetiroService, RetiroService>();
 builder.Services.AddScoped<IMercadoRepository, MercadoRepository>();
 builder.Services.AddScoped<IMercadoService, MercadoService>();
+builder.Services.AddScoped<IPerfilService, PerfilService>();
 
 var app = builder.Build();
 

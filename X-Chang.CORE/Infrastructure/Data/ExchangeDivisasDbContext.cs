@@ -1,6 +1,7 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Metadata;
 using X_Chang.CORE.Core.Entities;
 
 namespace X_Chang.CORE.Infrastructure.Data;
@@ -87,7 +88,7 @@ public partial class ExchangeDivisasDbContext : DbContext
         // ("ConnectionStrings:DevConnection"); esta queda como respaldo para el diseñador de EF.
         if (!optionsBuilder.IsConfigured)
         {
-            optionsBuilder.UseSqlServer("Server=localhost;Database=ExchangeDivisasDB;Trusted_Connection=True;TrustServerCertificate=True");
+            optionsBuilder.UseNpgsql("Host=db.pzaucxfwpbfkrwpwnfhv.supabase.co;Port=5432;Database=postgres;Username=postgres;Password=TU_DATABASE_PASSWORD;SSL Mode=Require;Trust Server Certificate=true");
         }
     }
 
@@ -345,23 +346,52 @@ public partial class ExchangeDivisasDbContext : DbContext
 
         modelBuilder.Entity<HistoricoPreciosPar>(entity =>
         {
-            entity.HasKey(e => e.HistoricoPrecioId).HasName("PK__Historic__1F78ECE4B01FEA34");
+            entity.ToTable("historicopreciospar");
 
-            entity.HasIndex(e => new { e.ParMonedaId, e.FechaRegistro }, "IX_HistoricoPreciosPar_ParFecha").IsDescending(false, true);
+            entity.HasKey(e => e.HistoricoPrecioId)
+                .HasName("historicopreciospar_pkey");
 
-            entity.Property(e => e.FechaRegistro).HasDefaultValueSql("(sysdatetime())");
-            entity.Property(e => e.Margen)
-                .HasComputedColumnSql("(case when [MayorPrecioCompra] IS NOT NULL AND [MenorPrecioVenta] IS NOT NULL then [MenorPrecioVenta]-[MayorPrecioCompra]  end)", false)
-                .HasColumnType("decimal(29, 8)");
-            entity.Property(e => e.MayorPrecioCompra).HasColumnType("decimal(28, 8)");
-            entity.Property(e => e.MenorPrecioVenta).HasColumnType("decimal(28, 8)");
-            entity.Property(e => e.VolumenCompra).HasColumnType("decimal(28, 8)");
-            entity.Property(e => e.VolumenVenta).HasColumnType("decimal(28, 8)");
+            entity.Property(e => e.HistoricoPrecioId)
+                .HasColumnName("historicoprecioid");
 
-            entity.HasOne(d => d.ParMoneda).WithMany(p => p.HistoricoPreciosPar)
+            entity.Property(e => e.ParMonedaId)
+                .HasColumnName("parmonedaid");
+
+            entity.Property(e => e.MayorPrecioCompra)
+                .HasColumnName("mayorpreciocompra")
+                .HasColumnType("numeric(28, 8)");
+
+            entity.Property(e => e.MenorPrecioVenta)
+                .HasColumnName("menorprecioventa")
+                .HasColumnType("numeric(28, 8)");
+
+            entity.Property(e => e.VolumenCompra)
+                .HasColumnName("volumencompra")
+                .HasColumnType("numeric(28, 8)");
+
+            entity.Property(e => e.VolumenVenta)
+                .HasColumnName("volumenventa")
+                .HasColumnType("numeric(28, 8)");
+
+            entity.Property(e => e.FechaRegistro)
+                .HasColumnName("fecharegistro")
+                .HasDefaultValueSql("now()");
+
+            entity.Property(e => e.SnapshotMinuto)
+                .HasColumnName("snapshotminuto");
+
+            entity.Ignore(e => e.Margen);
+
+            entity.HasIndex(e => new { e.ParMonedaId, e.SnapshotMinuto })
+                .HasDatabaseName("uq_historicopreciospar_par_minuto")
+                .IsUnique()
+                .HasFilter("snapshotminuto is not null");
+
+            entity.HasOne(d => d.ParMoneda)
+                .WithMany(p => p.HistoricoPreciosPar)
                 .HasForeignKey(d => d.ParMonedaId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK__Historico__ParMo__0D44F85C");
+                .OnDelete(DeleteBehavior.Cascade)
+                .HasConstraintName("historicopreciospar_parmonedaid_fkey");
         });
 
         modelBuilder.Entity<MetodosPago>(entity =>
@@ -532,6 +562,16 @@ public partial class ExchangeDivisasDbContext : DbContext
             entity.Property(e => e.TotalPagado).HasColumnType("decimal(28, 8)");
             entity.Property(e => e.TotalRecibido).HasColumnType("decimal(28, 8)");
 
+            // rutasconversion no contiene operacioninmediataid en el script Supabase vigente.
+            entity.Ignore(e => e.RutasConversion);
+
+            // rutaconversionsaltos tampoco contiene operacioninmediataid ni operacioninmediatahijaid
+            // en el esquema Supabase vigente. Si solo se ignora el lado RutaConversionSaltos,
+            // EF intenta inferir la relación desde estas colecciones inversas y rompe el login
+            // al construir el modelo del DbContext.
+            entity.Ignore(e => e.RutaConversionSaltosOperacionInmediata);
+            entity.Ignore(e => e.RutaConversionSaltosOperacionInmediataHija);
+
             entity.HasOne(d => d.OperacionPadre).WithMany(p => p.InverseOperacionPadre)
                 .HasForeignKey(d => d.OperacionPadreId)
                 .HasConstraintName("FK_OperacionesInmediatas_OperacionPadre");
@@ -683,74 +723,137 @@ public partial class ExchangeDivisasDbContext : DbContext
 
         modelBuilder.Entity<RutaConversionSaltos>(entity =>
         {
-            entity.HasKey(e => e.RutaConversionSaltoId).HasName("PK__RutaConv__E4D44EF3896B8299");
+            entity.ToTable("rutaconversionsaltos");
 
-            entity.HasIndex(e => new { e.RutaConversionId, e.NumeroSalto }, "IX_RutaConversionSaltos_Ruta");
+            entity.HasKey(e => e.RutaConversionSaltoId)
+                .HasName("rutaconversionsaltos_pkey");
 
-            entity.HasIndex(e => new { e.RutaConversionId, e.NumeroSalto }, "UQ__RutaConv__A841EEA92513F170").IsUnique();
+            // En el script Supabase base, la PK de rutaconversionsaltos se llama saltoid.
+            // El bloque de compatibilidad web agrega columnas operativas, pero no renombra esa PK.
+            entity.Property(e => e.RutaConversionSaltoId)
+                .HasColumnName("saltoid");
 
-            entity.Property(e => e.CantidadConvertida).HasColumnType("decimal(28, 8)");
-            entity.Property(e => e.PrecioMaximo).HasColumnType("decimal(28, 8)");
-            entity.Property(e => e.PrecioMinimo).HasColumnType("decimal(28, 8)");
-            entity.Property(e => e.PrecioPromedio).HasColumnType("decimal(28, 8)");
-            entity.Property(e => e.ResultadoObtenido).HasColumnType("decimal(28, 8)");
+            entity.Property(e => e.RutaConversionId)
+                .HasColumnName("rutaconversionid");
+
+            entity.Property(e => e.NumeroSalto)
+                .HasColumnName("numerosalto");
+
+            entity.Property(e => e.ParMonedaId)
+                .HasColumnName("parmonedaid");
+
+            entity.Property(e => e.MonedaOrigenId)
+                .HasColumnName("monedaorigenid");
+
+            entity.Property(e => e.MonedaDestinoId)
+                .HasColumnName("monedadestinoid");
+
+            entity.Property(e => e.CantidadConvertida)
+                .HasColumnName("cantidadconvertida")
+                .HasColumnType("numeric(28, 8)");
+
+            entity.Property(e => e.PrecioMinimo)
+                .HasColumnName("preciominimo")
+                .HasColumnType("numeric(28, 8)");
+
+            entity.Property(e => e.PrecioMaximo)
+                .HasColumnName("preciomaximo")
+                .HasColumnType("numeric(28, 8)");
+
+            entity.Property(e => e.PrecioPromedio)
+                .HasColumnName("preciopromedio")
+                .HasColumnType("numeric(28, 8)");
+
+            entity.Property(e => e.ResultadoObtenido)
+                .HasColumnName("resultadoobtenido")
+                .HasColumnType("numeric(28, 8)");
+
+            entity.HasIndex(e => new { e.RutaConversionId, e.NumeroSalto }, "ix_rutaconversionsaltos_ruta");
+
+            // Estas columnas pertenecían al modelo SQL Server/web inicial. El esquema Supabase
+            // vigente para web no las necesita para mostrar rutas y el script de compatibilidad
+            // no las crea, por lo que deben quedar fuera del mapeo EF.
+            entity.Ignore(e => e.OperacionInmediataId);
+            entity.Ignore(e => e.OperacionInmediataHijaId);
+            entity.Ignore(e => e.OperacionInmediata);
+            entity.Ignore(e => e.OperacionInmediataHija);
 
             entity.HasOne(d => d.MonedaDestino).WithMany(p => p.RutaConversionSaltosMonedaDestino)
                 .HasForeignKey(d => d.MonedaDestinoId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK__RutaConve__Moned__719CDDE7");
+                .HasConstraintName("rutaconversionsaltos_monedadestinoid_fkey");
 
             entity.HasOne(d => d.MonedaOrigen).WithMany(p => p.RutaConversionSaltosMonedaOrigen)
                 .HasForeignKey(d => d.MonedaOrigenId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK__RutaConve__Moned__70A8B9AE");
-
-            entity.HasOne(d => d.OperacionInmediataHija).WithMany(p => p.RutaConversionSaltosOperacionInmediataHija)
-                .HasForeignKey(d => d.OperacionInmediataHijaId)
-                .HasConstraintName("FK_RutaConversionSaltos_OperacionHija");
-
-            entity.HasOne(d => d.OperacionInmediata).WithMany(p => p.RutaConversionSaltosOperacionInmediata)
-                .HasForeignKey(d => d.OperacionInmediataId)
-                .HasConstraintName("FK__RutaConve__Opera__72910220");
+                .HasConstraintName("rutaconversionsaltos_monedaorigenid_fkey");
 
             entity.HasOne(d => d.ParMoneda).WithMany(p => p.RutaConversionSaltos)
                 .HasForeignKey(d => d.ParMonedaId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK__RutaConve__ParMo__6FB49575");
+                .HasConstraintName("rutaconversionsaltos_parmonedaid_fkey");
 
             entity.HasOne(d => d.RutaConversion).WithMany(p => p.RutaConversionSaltos)
                 .HasForeignKey(d => d.RutaConversionId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK__RutaConve__RutaC__6EC0713C");
+                .OnDelete(DeleteBehavior.Cascade)
+                .HasConstraintName("rutaconversionsaltos_rutaconversionid_fkey");
         });
 
         modelBuilder.Entity<RutasConversion>(entity =>
         {
-            entity.HasKey(e => e.RutaConversionId).HasName("PK__RutasCon__E95E383970476D66");
+            entity.ToTable("rutasconversion");
 
-            entity.Property(e => e.AhorroEstimado).HasColumnType("decimal(28, 8)");
-            entity.Property(e => e.FechaCreacion).HasDefaultValueSql("(sysdatetime())");
-            entity.Property(e => e.GananciaEstimada).HasColumnType("decimal(28, 8)");
-            entity.Property(e => e.TotalEstimado).HasColumnType("decimal(28, 8)");
+            entity.HasKey(e => e.RutaConversionId)
+                .HasName("rutasconversion_pkey");
+
+            entity.Property(e => e.RutaConversionId)
+                .HasColumnName("rutaconversionid");
+
+            entity.Property(e => e.BusquedaRutaId)
+                .HasColumnName("busquedarutaid");
+
+            entity.Property(e => e.MonedaInicialId)
+                .HasColumnName("monedainicialid");
+
+            entity.Property(e => e.MonedaFinalId)
+                .HasColumnName("monedafinalid");
+
+            entity.Property(e => e.CantidadSaltos)
+                .HasColumnName("cantidadsaltos");
+
+            entity.Property(e => e.TotalEstimado)
+                .HasColumnName("totalestimado")
+                .HasColumnType("numeric(28, 8)");
+
+            entity.Property(e => e.AhorroEstimado)
+                .HasColumnName("ahorroestimado")
+                .HasColumnType("numeric(28, 8)");
+
+            entity.Property(e => e.FechaCreacion)
+                .HasColumnName("fechacreacion")
+                .HasDefaultValueSql("now()");
+
+            // El script Supabase vigente no tiene estas columnas en rutasconversion.
+            // La ganancia estimada de ventas se guarda en busquedasruta.gananciaestimada,
+            // y la operación inmediata queda representada por los saltos/operaciones hijas.
+            entity.Ignore(e => e.GananciaEstimada);
+            entity.Ignore(e => e.OperacionInmediataId);
+            entity.Ignore(e => e.OperacionInmediata);
 
             entity.HasOne(d => d.BusquedaRuta).WithMany(p => p.RutasConversion)
                 .HasForeignKey(d => d.BusquedaRutaId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK__RutasConv__Busqu__65370702");
+                .OnDelete(DeleteBehavior.Cascade)
+                .HasConstraintName("rutasconversion_busquedarutaid_fkey");
 
             entity.HasOne(d => d.MonedaFinal).WithMany(p => p.RutasConversionMonedaFinal)
                 .HasForeignKey(d => d.MonedaFinalId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK__RutasConv__Moned__681373AD");
+                .HasConstraintName("rutasconversion_monedafinalid_fkey");
 
             entity.HasOne(d => d.MonedaInicial).WithMany(p => p.RutasConversionMonedaInicial)
                 .HasForeignKey(d => d.MonedaInicialId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK__RutasConv__Moned__671F4F74");
-
-            entity.HasOne(d => d.OperacionInmediata).WithMany(p => p.RutasConversion)
-                .HasForeignKey(d => d.OperacionInmediataId)
-                .HasConstraintName("FK__RutasConv__Opera__662B2B3B");
+                .HasConstraintName("rutasconversion_monedainicialid_fkey");
         });
 
         modelBuilder.Entity<SaldosBilletera>(entity =>
@@ -829,6 +932,12 @@ public partial class ExchangeDivisasDbContext : DbContext
                 .HasMaxLength(10)
                 .HasDefaultValue("Claro");
 
+            entity.Ignore(e => e.Telefono);
+            entity.Ignore(e => e.FotoPerfilUrl);
+            entity.Ignore(e => e.TipoDocumento);
+            entity.Ignore(e => e.NumeroDocumento);
+            entity.Ignore(e => e.FotoUrl);
+
             entity.HasOne(d => d.Pais).WithMany(p => p.Usuarios)
                 .HasForeignKey(d => d.PaisId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
@@ -840,8 +949,45 @@ public partial class ExchangeDivisasDbContext : DbContext
                 .HasConstraintName("FK__Usuarios__RolId__5CD6CB2B");
         });
 
+        ApplySupabaseNamingConventions(modelBuilder);
+
         OnModelCreatingPartial(modelBuilder);
     }
+
+    private static void ApplySupabaseNamingConventions(ModelBuilder modelBuilder)
+    {
+        foreach (var entityType in modelBuilder.Model.GetEntityTypes())
+        {
+            var tableName = entityType.GetTableName();
+            if (!string.IsNullOrWhiteSpace(tableName))
+            {
+                entityType.SetTableName(tableName.ToLowerInvariant());
+            }
+
+            var finalTableName = entityType.GetTableName();
+            if (string.IsNullOrWhiteSpace(finalTableName))
+                continue;
+
+            var storeObject = StoreObjectIdentifier.Table(finalTableName, entityType.GetSchema());
+
+            foreach (var property in entityType.GetProperties())
+            {
+                var columnName = property.GetColumnName(storeObject);
+                if (!string.IsNullOrWhiteSpace(columnName))
+                    property.SetColumnName(columnName.ToLowerInvariant());
+            }
+
+            foreach (var key in entityType.GetKeys())
+                key.SetName(key.GetName()?.ToLowerInvariant());
+
+            foreach (var foreignKey in entityType.GetForeignKeys())
+                foreignKey.SetConstraintName(foreignKey.GetConstraintName()?.ToLowerInvariant());
+
+            foreach (var index in entityType.GetIndexes())
+                index.SetDatabaseName(index.GetDatabaseName()?.ToLowerInvariant());
+        }
+    }
+
 
     partial void OnModelCreatingPartial(ModelBuilder modelBuilder);
 }

@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using System.Security.Claims;
 using X_Chang.CORE.Core.DTOs;
 using X_Chang.CORE.Core.Interfaces;
+using X_Chang.API.Helpers;
 
 namespace X_Chang.API.Controllers
 {
@@ -23,9 +24,19 @@ namespace X_Chang.API.Controllers
         private int UsuarioId => int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
 
         [HttpGet("detalle")]
-        public async Task<IActionResult> GetDetalle([FromQuery] string tipo, [FromQuery] int id)
+        public async Task<IActionResult> GetDetalle(
+            [FromQuery] string? tipo,
+            [FromQuery] int? id,
+            [FromQuery] string? tipoOperacion,
+            [FromQuery] int? referenciaId)
         {
-            var resultado = await _cancelacionService.GetDetalle(UsuarioId, tipo, id);
+            var tipoFinal = !string.IsNullOrWhiteSpace(tipo) ? tipo : tipoOperacion;
+            var idFinal = id ?? referenciaId;
+
+            if (string.IsNullOrWhiteSpace(tipoFinal) || idFinal is null or <= 0)
+                return BadRequest(new { mensaje = "No se pudo identificar la operación a cancelar." });
+
+            var resultado = await _cancelacionService.GetDetalle(UsuarioId, tipoFinal, idFinal.Value);
             if (!resultado.Exito)
                 return BadRequest(new { mensaje = resultado.Mensaje });
             return Ok(resultado.Data);
@@ -43,11 +54,17 @@ namespace X_Chang.API.Controllers
                 UsuarioId,
                 "Cancelacion",
                 $"Cancelación de {can.TipoOperacion} completada",
-                $"Tu {can.TipoOperacion} ({can.Par}) fue cancelada exitosamente. " +
-                $"Cantidad cancelada: {can.CantidadCancelada}. " +
-                $"Monto reembolsado: {can.MontoReembolsado} {can.MonedaReembolso}. " +
-                $"Nuevo saldo: {can.NuevoSaldo} {can.MonedaReembolso}. " +
-                $"Fecha: {can.FechaCancelacion:dd/MM/yyyy HH:mm}.",
+                EmailHtmlBuilder.Build(
+                    $"Cancelación de {can.TipoOperacion}",
+                    $"Tu {can.TipoOperacion} del par {can.Par} fue cancelada exitosamente.",
+                    [
+                        ("Tipo de operación",  can.TipoOperacion),
+                        ("Par",                can.Par),
+                        ("Cantidad cancelada", can.CantidadCancelada.ToString("N2")),
+                        ("Monto reembolsado",  $"{can.MontoReembolsado.ToString("N2")} {can.MonedaReembolso}"),
+                        ("Nuevo saldo",        $"{can.NuevoSaldo.ToString("N2")} {can.MonedaReembolso}"),
+                        ("Fecha y hora",       can.FechaCancelacion.ToString("dd/MM/yyyy HH:mm")),
+                    ]),
                 can.TipoOperacion == "Orden de compra" ? "OrdenCompra" : "OfertaVenta",
                 can.CancelacionId);
 

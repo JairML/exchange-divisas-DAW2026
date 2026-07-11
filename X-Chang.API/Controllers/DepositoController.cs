@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.Security.Claims;
+using X_Chang.API.Helpers;
 using X_Chang.CORE.Core.DTOs;
 using X_Chang.CORE.Core.Interfaces;
 
@@ -46,13 +47,22 @@ namespace X_Chang.API.Controllers
                 return BadRequest(new { mensaje = resultado.Mensaje });
 
             var dep = resultado.Data!;
+            var cuerpoHtml = EmailHtmlBuilder.Build(
+                "Confirmación de depósito",
+                "Tu depósito fue registrado exitosamente. A continuación encontrarás el resumen de la operación:",
+                [
+                    ("Monto depositado",      $"{dep.MontoDepositado.ToString("N2")} {dep.CodigoISO}"),
+                    ("Comisión aplicada",     $"{dep.ComisionAplicada.ToString("N2")} {dep.CodigoISO}"),
+                    ("Total pagado",          $"{dep.TotalPagado.ToString("N2")} {dep.CodigoISO}"),
+                    ("Nuevo saldo disponible",$"{dep.NuevoSaldo.ToString("N2")} {dep.CodigoISO}"),
+                    ("Fecha y hora",          dep.FechaDeposito.ToString("dd/MM/yyyy HH:mm")),
+                ]);
+
             await _notifService.EncolarAsync(
                 UsuarioId,
                 "Deposito",
                 $"Depósito de {dep.CodigoISO} completado",
-                $"Tu depósito de {dep.MontoDepositado} {dep.CodigoISO} fue registrado exitosamente. " +
-                $"Comisión aplicada: {dep.ComisionAplicada}. Total pagado: {dep.TotalPagado}. " +
-                $"Nuevo saldo: {dep.NuevoSaldo} {dep.CodigoISO}. Fecha: {dep.FechaDeposito:dd/MM/yyyy HH:mm}.",
+                cuerpoHtml,
                 "Deposito",
                 dep.DepositoId);
 

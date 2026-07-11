@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.Security.Claims;
+using X_Chang.API.Helpers;
 using X_Chang.CORE.Core.DTOs.VentaInmediata;
 using X_Chang.CORE.Core.Interfaces;
 
@@ -70,9 +71,16 @@ namespace X_Chang.API.Controllers
                     UsuarioId,
                     "VentaInmediata",
                     $"Venta inmediata ejecutada: {resultado.MonedaOrigen} → {resultado.MonedaDestino}",
-                    $"Tu venta de {resultado.CantidadEjecutada} {resultado.MonedaOrigen} fue ejecutada exitosamente. " +
-                    $"Total recibido: {resultado.TotalRecibido} {resultado.MonedaDestino}. " +
-                    $"Estado: {resultado.Estado}. Fecha: {resultado.FechaOperacion:dd/MM/yyyy HH:mm}.",
+                    EmailHtmlBuilder.Build(
+                        "Venta inmediata ejecutada",
+                        $"Tu venta de {resultado.MonedaOrigen} → {resultado.MonedaDestino} fue ejecutada exitosamente.",
+                        [
+                            ("Par de monedas",   $"{resultado.MonedaOrigen} → {resultado.MonedaDestino}"),
+                            ("Cantidad vendida", $"{resultado.CantidadEjecutada.ToString("N2")} {resultado.MonedaOrigen}"),
+                            ("Total recibido",   $"{resultado.TotalRecibido.ToString("N2")} {resultado.MonedaDestino}"),
+                            ("Estado",           resultado.Estado),
+                            ("Fecha y hora",     resultado.FechaOperacion.ToString("dd/MM/yyyy HH:mm")),
+                        ]),
                     "OperacionInmediata",
                     resultado.OperacionInmediataId);
 
@@ -152,9 +160,16 @@ namespace X_Chang.API.Controllers
                     UsuarioId,
                     "VentaInmediataMejorRuta",
                     $"Venta por mejor ruta ejecutada: {resultado.MonedaOrigen} → {resultado.MonedaDestino}",
-                    $"Tu venta por mejor ruta de {resultado.CantidadEjecutada} {resultado.MonedaOrigen} fue ejecutada exitosamente. " +
-                    $"Total recibido: {resultado.TotalRecibido} {resultado.MonedaDestino}. " +
-                    $"Estado: {resultado.Estado}. Fecha: {resultado.FechaOperacion:dd/MM/yyyy HH:mm}.",
+                    EmailHtmlBuilder.Build(
+                        "Venta por mejor ruta ejecutada",
+                        $"Tu venta por mejor ruta de {resultado.MonedaOrigen} → {resultado.MonedaDestino} fue ejecutada exitosamente.",
+                        [
+                            ("Par de monedas",   $"{resultado.MonedaOrigen} → {resultado.MonedaDestino}"),
+                            ("Cantidad vendida", $"{resultado.CantidadEjecutada.ToString("N2")} {resultado.MonedaOrigen}"),
+                            ("Total recibido",   $"{resultado.TotalRecibido.ToString("N2")} {resultado.MonedaDestino}"),
+                            ("Estado",           resultado.Estado),
+                            ("Fecha y hora",     resultado.FechaOperacion.ToString("dd/MM/yyyy HH:mm")),
+                        ]),
                     "OperacionInmediata",
                     resultado.OperacionInmediataId);
 

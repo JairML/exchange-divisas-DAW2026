@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using X_Chang.CORE.Core.Entities;
@@ -13,9 +14,18 @@ namespace X_Chang.CORE.Core.Interfaces
         Task<bool> MetodoDisponibleParaUsuario(int metodoPagoId, int usuarioId);
         Task<string?> GetConfiguracion(string clave);
         Task<decimal> GetSaldoDisponible(int usuarioId, int monedaId);
-        Task<(int retiroId, decimal nuevoSaldo, DateTime fecha, string voucherUrl)> RegistrarRetiro(
-            int usuarioId, int monedaId, int metodoPagoId,
-            decimal monto, decimal comision, decimal montoFinal,
-            string correoDestino, string codigoIso);
+
+        // Registra el retiro de forma atómica: crea el retiro, descuenta el saldo,
+        // registra el movimiento y el historial.
+        // Devuelve el id del retiro, el nuevo saldo, la fecha y la URL del voucher.
+        Task<(int retiroId, decimal nuevoSaldo, DateTime fecha, string? voucherUrl)> RegistrarRetiro(
+            int usuarioId,
+            int monedaId,
+            int metodoPagoId,
+            decimal monto,
+            decimal comision,
+            decimal montoFinal,
+            string correoDestino,
+            string codigoIso);
     }
 }

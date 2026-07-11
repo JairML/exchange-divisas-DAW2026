@@ -75,6 +75,10 @@ public class EmailService : IEmailService
 
     private static string ConstruirHtml(string cuerpo, IEnumerable<AdjuntosCorreo>? adjuntos)
     {
+        // Si el cuerpo ya es HTML completo, lo usamos directamente
+        if (cuerpo.TrimStart().StartsWith("<"))
+            return cuerpo;
+
         var html = $"<p>{cuerpo}</p>";
 
         var lista = adjuntos?.ToList();

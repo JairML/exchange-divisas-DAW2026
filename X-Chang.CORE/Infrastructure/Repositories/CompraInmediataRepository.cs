@@ -1,6 +1,8 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Text;
+using System.Text.Json;
+using System.Data;
 using Microsoft.EntityFrameworkCore;
 using X_Chang.CORE.Core.DTOs.CompraInmediata;
 using X_Chang.CORE.Core.Entities;
@@ -41,7 +43,10 @@ namespace X_Chang.CORE.Infrastructure.Repositories
                 .Where(o =>
                     o.ParMonedaId == parMonedaId &&
                     o.CantidadPendiente > 0 &&
-                    (o.Estado == "Activa" || o.Estado == "Parcialmente ejecutada"))
+                    (o.Estado == "Activa" || o.Estado == "Parcialmente ejecutada") &&
+                    !(o.OrdenCompraEspejoId != null &&
+                      !_context.MovimientosBilletera.Any(m => m.ReferenciaId == o.OfertaVentaId &&
+                        (m.ReferenciaTipo == "OfertaVenta" || m.ReferenciaTipo == "ofertasventa"))))
                 .OrderBy(o => o.PrecioUnitario)
                 .ThenBy(o => o.FechaCreacion)
                 .ToListAsync();
@@ -187,24 +192,79 @@ namespace X_Chang.CORE.Infrastructure.Repositories
             await _context.SaveChangesAsync();
         }
 
-        public async Task<CompraInmediataResponseDto> EjecutarCompraInmediataNormalAsync(
-            int usuarioId,
-            int parMonedaId,
-            decimal cantidadAObtener)
+
+public async Task<CompraInmediataResponseDto> EjecutarCompraInmediataNormalAsync(
+    int usuarioId,
+    int parMonedaId,
+    decimal cantidadAObtener)
+{
+    var connection = _context.Database.GetDbConnection();
+    var debeCerrar = connection.State != ConnectionState.Open;
+
+    if (debeCerrar)
+        await connection.OpenAsync();
+
+    try
+    {
+        await using var command = connection.CreateCommand();
+        command.CommandText = "select public.ejecutar_compra_inmediata_segura(@usuarioid, @parmonedaid, @cantidad)::text";
+
+        var pUsuario = command.CreateParameter();
+        pUsuario.ParameterName = "usuarioid";
+        pUsuario.Value = usuarioId;
+        command.Parameters.Add(pUsuario);
+
+        var pPar = command.CreateParameter();
+        pPar.ParameterName = "parmonedaid";
+        pPar.Value = parMonedaId;
+        command.Parameters.Add(pPar);
+
+        var pCantidad = command.CreateParameter();
+        pCantidad.ParameterName = "cantidad";
+        pCantidad.Value = cantidadAObtener;
+        command.Parameters.Add(pCantidad);
+
+        var json = (string?)await command.ExecuteScalarAsync()
+            ?? throw new InvalidOperationException("No se obtuvo respuesta de Supabase.");
+
+        using var document = JsonDocument.Parse(json);
+        var root = document.RootElement;
+
+        return new CompraInmediataResponseDto
         {
-            using var transaction = await _context.Database.BeginTransactionAsync();
+            OperacionInmediataId = root.TryGetProperty("operacionid", out var id) ? id.GetInt32() : 0,
+            ParMonedaId = parMonedaId,
+            TipoOperacion = "Compra inmediata",
+            MetodoEjecucion = "Normal",
+            MonedaOrigen = root.TryGetProperty("monedaorigen", out var origen) ? origen.GetString() ?? string.Empty : string.Empty,
+            MonedaDestino = root.TryGetProperty("monedadestino", out var destino) ? destino.GetString() ?? string.Empty : string.Empty,
+            CantidadSolicitada = cantidadAObtener,
+            CantidadEjecutada = root.TryGetProperty("cantidadcomprada", out var cantidadComprada) ? cantidadComprada.GetDecimal() : cantidadAObtener,
+            TotalPagado = root.TryGetProperty("totalpagado", out var totalPagado) ? totalPagado.GetDecimal() : 0m,
+            Estado = "Completada",
+            FechaOperacion = DateTime.UtcNow,
+            Ejecuciones = new List<DetalleEjecucionCompraDto>()
+        };
+    }
+    catch (Exception ex) when (ex.Message.Contains("Saldo insuficiente", StringComparison.OrdinalIgnoreCase))
+    {
+        throw new InvalidOperationException("Saldo insuficiente");
+    }
+    catch (Exception ex) when (ex.Message.Contains("Liquidez insuficiente", StringComparison.OrdinalIgnoreCase))
+    {
+        throw new InvalidOperationException("Liquidez insuficiente");
+    }
+    catch (Exception ex) when (ex.Message.Contains("Valor inválido", StringComparison.OrdinalIgnoreCase))
+    {
+        throw new InvalidOperationException("Valor inválido");
+    }
+    finally
+    {
+        if (debeCerrar)
+            await connection.CloseAsync();
+    }
+}
 
-            var result = await EjecutarCompraNormalInternaAsync(
-                usuarioId,
-                parMonedaId,
-                cantidadAObtener,
-                "Normal",
-                null);
-
-            await transaction.CommitAsync();
-
-            return result;
-        }
 
         public async Task<CompraInmediataResponseDto> EjecutarCompraInmediataPorRutaAsync(
     int usuarioId,

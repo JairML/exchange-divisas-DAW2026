@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.Security.Claims;
+using X_Chang.API.Helpers;
 using X_Chang.CORE.Core.DTOs.CompraInmediata;
 using X_Chang.CORE.Core.Interfaces;
 
@@ -70,9 +71,16 @@ namespace X_Chang.API.Controllers
                     UsuarioId,
                     "CompraInmediata",
                     $"Compra inmediata ejecutada: {resultado.MonedaOrigen} → {resultado.MonedaDestino}",
-                    $"Tu compra de {resultado.CantidadEjecutada} {resultado.MonedaDestino} fue ejecutada exitosamente. " +
-                    $"Total pagado: {resultado.TotalPagado} {resultado.MonedaOrigen}. " +
-                    $"Estado: {resultado.Estado}. Fecha: {resultado.FechaOperacion:dd/MM/yyyy HH:mm}.",
+                    EmailHtmlBuilder.Build(
+                        "Compra inmediata ejecutada",
+                        $"Tu compra de {resultado.MonedaOrigen} → {resultado.MonedaDestino} fue ejecutada exitosamente.",
+                        [
+                            ("Par de monedas",    $"{resultado.MonedaOrigen} → {resultado.MonedaDestino}"),
+                            ("Cantidad obtenida", $"{resultado.CantidadEjecutada.ToString("N2")} {resultado.MonedaDestino}"),
+                            ("Total pagado",      $"{resultado.TotalPagado.ToString("N2")} {resultado.MonedaOrigen}"),
+                            ("Estado",            resultado.Estado),
+                            ("Fecha y hora",      resultado.FechaOperacion.ToString("dd/MM/yyyy HH:mm")),
+                        ]),
                     "OperacionInmediata",
                     resultado.OperacionInmediataId);
 
@@ -152,9 +160,16 @@ namespace X_Chang.API.Controllers
                     UsuarioId,
                     "CompraInmediataMejorRuta",
                     $"Compra por mejor ruta ejecutada: {resultado.MonedaOrigen} → {resultado.MonedaDestino}",
-                    $"Tu compra por mejor ruta de {resultado.CantidadEjecutada} {resultado.MonedaDestino} fue ejecutada exitosamente. " +
-                    $"Total pagado: {resultado.TotalPagado} {resultado.MonedaOrigen}. " +
-                    $"Estado: {resultado.Estado}. Fecha: {resultado.FechaOperacion:dd/MM/yyyy HH:mm}.",
+                    EmailHtmlBuilder.Build(
+                        "Compra por mejor ruta ejecutada",
+                        $"Tu compra por mejor ruta de {resultado.MonedaOrigen} → {resultado.MonedaDestino} fue ejecutada exitosamente.",
+                        [
+                            ("Par de monedas",    $"{resultado.MonedaOrigen} → {resultado.MonedaDestino}"),
+                            ("Cantidad obtenida", $"{resultado.CantidadEjecutada.ToString("N2")} {resultado.MonedaDestino}"),
+                            ("Total pagado",      $"{resultado.TotalPagado.ToString("N2")} {resultado.MonedaOrigen}"),
+                            ("Estado",            resultado.Estado),
+                            ("Fecha y hora",      resultado.FechaOperacion.ToString("dd/MM/yyyy HH:mm")),
+                        ]),
                     "OperacionInmediata",
                     resultado.OperacionInmediataId);
 

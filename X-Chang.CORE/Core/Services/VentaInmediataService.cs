@@ -44,9 +44,11 @@ namespace X_Chang.CORE.Core.Services
                 request.CantidadAVender,
                 ordenes);
 
+            // En venta inmediata se vende la moneda destino del par y se recibe la moneda origen.
+            // Ejemplo: en PEN/USD, el usuario vende USD y recibe PEN.
             var saldoDisponible = await _ventaRepository.ObtenerSaldoDisponibleAsync(
                 usuarioId,
-                par.MonedaOrigenId);
+                par.MonedaDestinoId);
 
             resumen.SaldoSuficiente = saldoDisponible >= request.CantidadAVender;
 
@@ -160,9 +162,12 @@ namespace X_Chang.CORE.Core.Services
 
             var pares = await _ventaRepository.ObtenerParesActivosAsync();
 
+            // La ruta de una venta inicia en la moneda que el usuario vende
+            // y termina en la moneda que recibirá.
+            // Ejemplo PEN/USD: USD -> ... -> PEN.
             var rutas = GenerarRutas(
-                parObjetivo.MonedaOrigenId,
                 parObjetivo.MonedaDestinoId,
+                parObjetivo.MonedaOrigenId,
                 request.CantidadMaximaSaltos,
                 pares);
 

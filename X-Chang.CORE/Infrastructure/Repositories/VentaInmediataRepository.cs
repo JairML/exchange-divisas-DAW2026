@@ -1,6 +1,8 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Text;
+using System.Text.Json;
+using System.Data;
 using Microsoft.EntityFrameworkCore;
 using X_Chang.CORE.Core.DTOs.VentaInmediata;
 using X_Chang.CORE.Core.Entities;
@@ -41,7 +43,10 @@ namespace X_Chang.CORE.Infrastructure.Repositories
                 .Where(o =>
                     o.ParMonedaId == parMonedaId &&
                     o.CantidadPendiente > 0 &&
-                    (o.Estado == "Activa" || o.Estado == "Parcialmente ejecutada"))
+                    (o.Estado == "Activa" || o.Estado == "Parcialmente ejecutada") &&
+                    !(_context.OfertasVenta.Any(v => v.OrdenCompraEspejoId == o.OrdenCompraId) &&
+                      !_context.MovimientosBilletera.Any(m => m.ReferenciaId == o.OrdenCompraId &&
+                        (m.ReferenciaTipo == "OrdenCompra" || m.ReferenciaTipo == "ordenescompra"))))
                 .OrderByDescending(o => o.PrecioUnitario)
                 .ThenBy(o => o.FechaCreacion)
                 .ToListAsync();
@@ -151,8 +156,8 @@ namespace X_Chang.CORE.Infrastructure.Repositories
             var ruta = new RutasConversion
             {
                 BusquedaRutaId = busquedaRutaId,
-                MonedaInicialId = busqueda.ParMoneda.MonedaOrigenId,
-                MonedaFinalId = busqueda.ParMoneda.MonedaDestinoId,
+                MonedaInicialId = busqueda.ParMoneda.MonedaDestinoId,
+                MonedaFinalId = busqueda.ParMoneda.MonedaOrigenId,
                 CantidadSaltos = resultado.Saltos.Count,
                 TotalEstimado = resultado.TotalRutaEncontrada,
                 GananciaEstimada = resultado.GananciaEstimada,
@@ -187,25 +192,80 @@ namespace X_Chang.CORE.Infrastructure.Repositories
             await _context.SaveChangesAsync();
         }
 
+
         public async Task<VentaInmediataResponseDto> EjecutarVentaInmediataNormalAsync(
             int usuarioId,
             int parMonedaId,
             decimal cantidadAVender,
             bool venderCantidadDisponible)
         {
-            using var transaction = await _context.Database.BeginTransactionAsync();
+    var connection = _context.Database.GetDbConnection();
+    var debeCerrar = connection.State != ConnectionState.Open;
 
-            var result = await EjecutarVentaNormalInternaAsync(
-                usuarioId,
-                parMonedaId,
-                cantidadAVender,
-                "Normal",
-                null);
+    if (debeCerrar)
+        await connection.OpenAsync();
 
-            await transaction.CommitAsync();
+    try
+    {
+        await using var command = connection.CreateCommand();
+        command.CommandText = "select public.ejecutar_venta_inmediata_segura(@usuarioid, @parmonedaid, @cantidad)::text";
 
-            return result;
-        }
+        var pUsuario = command.CreateParameter();
+        pUsuario.ParameterName = "usuarioid";
+        pUsuario.Value = usuarioId;
+        command.Parameters.Add(pUsuario);
+
+        var pPar = command.CreateParameter();
+        pPar.ParameterName = "parmonedaid";
+        pPar.Value = parMonedaId;
+        command.Parameters.Add(pPar);
+
+        var pCantidad = command.CreateParameter();
+        pCantidad.ParameterName = "cantidad";
+        pCantidad.Value = cantidadAVender;
+        command.Parameters.Add(pCantidad);
+
+        var json = (string?)await command.ExecuteScalarAsync()
+            ?? throw new InvalidOperationException("No se obtuvo respuesta de Supabase.");
+
+        using var document = JsonDocument.Parse(json);
+        var root = document.RootElement;
+
+        return new VentaInmediataResponseDto
+        {
+            OperacionInmediataId = root.TryGetProperty("operacionid", out var id) ? id.GetInt32() : 0,
+            ParMonedaId = parMonedaId,
+            TipoOperacion = "Venta inmediata",
+            MetodoEjecucion = "Normal",
+            MonedaOrigen = root.TryGetProperty("monedarecibida", out var recibida) ? recibida.GetString() ?? string.Empty : string.Empty,
+            MonedaDestino = root.TryGetProperty("monedavendida", out var vendida) ? vendida.GetString() ?? string.Empty : string.Empty,
+            CantidadSolicitada = cantidadAVender,
+            CantidadEjecutada = root.TryGetProperty("cantidadvendida", out var cantidadVendida) ? cantidadVendida.GetDecimal() : cantidadAVender,
+            TotalRecibido = root.TryGetProperty("totalrecibido", out var totalRecibido) ? totalRecibido.GetDecimal() : 0m,
+            Estado = "Completada",
+            FechaOperacion = DateTime.UtcNow,
+            Ejecuciones = new List<DetalleEjecucionVentaDto>()
+        };
+    }
+    catch (Exception ex) when (ex.Message.Contains("Saldo insuficiente", StringComparison.OrdinalIgnoreCase))
+    {
+        throw new InvalidOperationException("Saldo insuficiente");
+    }
+    catch (Exception ex) when (ex.Message.Contains("Liquidez insuficiente", StringComparison.OrdinalIgnoreCase))
+    {
+        throw new InvalidOperationException("Liquidez insuficiente");
+    }
+    catch (Exception ex) when (ex.Message.Contains("Valor inválido", StringComparison.OrdinalIgnoreCase))
+    {
+        throw new InvalidOperationException("Valor inválido");
+    }
+    finally
+    {
+        if (debeCerrar)
+            await connection.CloseAsync();
+    }
+}
+
 
         public async Task<VentaInmediataResponseDto> EjecutarVentaInmediataPorRutaAsync(
             int usuarioId,
@@ -362,20 +422,22 @@ namespace X_Chang.CORE.Infrastructure.Repositories
             if (cantidadEjecutada < cantidadAVender)
                 throw new InvalidOperationException("No existe suficiente liquidez para cubrir toda la cantidad solicitada.");
 
-            var saldoVendedorOrigen = await ObtenerSaldoEntityAsync(usuarioId, par.MonedaOrigenId);
+            // En venta inmediata se vende la moneda destino del par y se recibe la moneda origen.
+            // Ejemplo: en PEN/USD, el vendedor entrega USD y recibe PEN.
             var saldoVendedorDestino = await ObtenerSaldoEntityAsync(usuarioId, par.MonedaDestinoId);
+            var saldoVendedorOrigen = await ObtenerSaldoEntityAsync(usuarioId, par.MonedaOrigenId);
 
-            if (saldoVendedorOrigen.SaldoDisponible < cantidadEjecutada)
+            if (saldoVendedorDestino.SaldoDisponible < cantidadEjecutada)
                 throw new InvalidOperationException("Saldo insuficiente.");
 
-            var saldoAnteriorVendedorOrigen = saldoVendedorOrigen.SaldoDisponible;
             var saldoAnteriorVendedorDestino = saldoVendedorDestino.SaldoDisponible;
+            var saldoAnteriorVendedorOrigen = saldoVendedorOrigen.SaldoDisponible;
 
-            saldoVendedorOrigen.SaldoDisponible -= cantidadEjecutada;
-            saldoVendedorOrigen.FechaActualizacion = DateTime.Now;
-
-            saldoVendedorDestino.SaldoDisponible += totalRecibido;
+            saldoVendedorDestino.SaldoDisponible -= cantidadEjecutada;
             saldoVendedorDestino.FechaActualizacion = DateTime.Now;
+
+            saldoVendedorOrigen.SaldoDisponible += totalRecibido;
+            saldoVendedorOrigen.FechaActualizacion = DateTime.Now;
 
             var operacion = new OperacionesInmediatas
             {
@@ -418,11 +480,11 @@ namespace X_Chang.CORE.Infrastructure.Repositories
             _context.MovimientosBilletera.Add(new MovimientosBilletera
             {
                 UsuarioId = usuarioId,
-                MonedaId = par.MonedaOrigenId,
+                MonedaId = par.MonedaDestinoId,
                 TipoMovimiento = "VentaInmediata",
                 Monto = -cantidadEjecutada,
-                SaldoAnterior = saldoAnteriorVendedorOrigen,
-                SaldoPosterior = saldoVendedorOrigen.SaldoDisponible,
+                SaldoAnterior = saldoAnteriorVendedorDestino,
+                SaldoPosterior = saldoVendedorDestino.SaldoDisponible,
                 FechaMovimiento = DateTime.Now,
                 ReferenciaTipo = "OperacionInmediata",
                 ReferenciaId = operacion.OperacionInmediataId
@@ -431,11 +493,11 @@ namespace X_Chang.CORE.Infrastructure.Repositories
             _context.MovimientosBilletera.Add(new MovimientosBilletera
             {
                 UsuarioId = usuarioId,
-                MonedaId = par.MonedaDestinoId,
+                MonedaId = par.MonedaOrigenId,
                 TipoMovimiento = "VentaInmediata",
                 Monto = totalRecibido,
-                SaldoAnterior = saldoAnteriorVendedorDestino,
-                SaldoPosterior = saldoVendedorDestino.SaldoDisponible,
+                SaldoAnterior = saldoAnteriorVendedorOrigen,
+                SaldoPosterior = saldoVendedorOrigen.SaldoDisponible,
                 FechaMovimiento = DateTime.Now,
                 ReferenciaTipo = "OperacionInmediata",
                 ReferenciaId = operacion.OperacionInmediataId
@@ -457,11 +519,11 @@ namespace X_Chang.CORE.Infrastructure.Repositories
 
                 await SincronizarOfertaEspejoDesdeOrdenAsync(orden, cantidad, total);
 
-                var saldoCompradorOrigen = await ObtenerSaldoEntityAsync(orden.UsuarioId, par.MonedaOrigenId);
-                var saldoAnteriorCompradorOrigen = saldoCompradorOrigen.SaldoDisponible;
+                var saldoCompradorDestino = await ObtenerSaldoEntityAsync(orden.UsuarioId, par.MonedaDestinoId);
+                var saldoAnteriorCompradorDestino = saldoCompradorDestino.SaldoDisponible;
 
-                saldoCompradorOrigen.SaldoDisponible += cantidad;
-                saldoCompradorOrigen.FechaActualizacion = DateTime.Now;
+                saldoCompradorDestino.SaldoDisponible += cantidad;
+                saldoCompradorDestino.FechaActualizacion = DateTime.Now;
 
                 var ejecucion = new EjecucionesOrden
                 {
@@ -488,11 +550,11 @@ namespace X_Chang.CORE.Infrastructure.Repositories
                 _context.MovimientosBilletera.Add(new MovimientosBilletera
                 {
                     UsuarioId = orden.UsuarioId,
-                    MonedaId = par.MonedaOrigenId,
+                    MonedaId = par.MonedaDestinoId,
                     TipoMovimiento = "OrdenCompra",
                     Monto = cantidad,
-                    SaldoAnterior = saldoAnteriorCompradorOrigen,
-                    SaldoPosterior = saldoCompradorOrigen.SaldoDisponible,
+                    SaldoAnterior = saldoAnteriorCompradorDestino,
+                    SaldoPosterior = saldoCompradorDestino.SaldoDisponible,
                     FechaMovimiento = DateTime.Now,
                     ReferenciaTipo = "EjecucionOrden",
                     ReferenciaId = ejecucion.EjecucionId

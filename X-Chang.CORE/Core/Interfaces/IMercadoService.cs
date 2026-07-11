@@ -11,5 +11,8 @@ namespace X_Chang.CORE.Core.Interfaces
         Task<ResumenOfertaVentaDto> ObtenerResumenOfertaVentaAsync(string tokenSesion, CrearOfertaVentaRequestDto request);
         Task<OfertaVentaResultadoDto> CrearOfertaVentaAsync(string tokenSesion, CrearOfertaVentaRequestDto request);
         Task<PanelAdministrativoDto> ObtenerPanelAdministrativoAsync(string tokenSesion, FiltroPanelAdministrativoDto filtro);
+        Task<ActividadRecientePaginadaDto> ObtenerActividadRecienteAsync(string tokenSesion, FiltroActividadRecienteDto filtro);
+        Task<ExportarPanelAdminResponseDto> ExportarActividadRecienteExcelAsync(string tokenSesion, ExportarPanelAdminRequestDto filtro);
+        Task<ExportarPanelAdminResponseDto> ExportarActividadRecientePdfAsync(string tokenSesion, ExportarPanelAdminRequestDto filtro);
     }
 }

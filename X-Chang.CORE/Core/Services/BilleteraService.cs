@@ -21,17 +21,23 @@ public class BilleteraService : IBilleteraService
             .FirstOrDefaultAsync(b => b.UsuarioId == usuarioId)
             ?? throw new InvalidOperationException("Billetera no encontrada.");
 
-        var saldos = await _context.SaldosBilletera
-            .Include(s => s.Moneda)
-            .Where(s => s.BilleteraId == billetera.BilleteraId)
+        var saldos = await _context.Monedas
+            .Where(m => m.Activa)
+            .GroupJoin(
+                _context.SaldosBilletera.Where(s => s.BilleteraId == billetera.BilleteraId),
+                m => m.MonedaId,
+                s => s.MonedaId,
+                (m, saldosMoneda) => new { Moneda = m, SaldosMoneda = saldosMoneda })
+            .SelectMany(
+                x => x.SaldosMoneda.DefaultIfEmpty(),
+                (x, saldo) => new SaldoMonedaDTO
+                {
+                    MonedaId = x.Moneda.MonedaId,
+                    CodigoISO = x.Moneda.CodigoIso,
+                    Nombre = x.Moneda.Nombre,
+                    SaldoDisponible = saldo != null ? saldo.SaldoDisponible : 0
+                })
             .OrderByDescending(s => s.SaldoDisponible)
-            .Select(s => new SaldoMonedaDTO
-            {
-                MonedaId = s.MonedaId,
-                CodigoISO = s.Moneda.CodigoIso,
-                Nombre = s.Moneda.Nombre,
-                SaldoDisponible = s.SaldoDisponible
-            })
             .ToListAsync();
 
         return new BilleteraResumenDTO

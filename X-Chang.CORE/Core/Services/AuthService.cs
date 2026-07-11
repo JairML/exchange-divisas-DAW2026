@@ -1,5 +1,5 @@
 using System.Security.Cryptography;
-using BC = BCrypt.Net.BCrypt;
+using System.Text;
 using Microsoft.Extensions.Options;
 using X_Chang.CORE.Core.DTOs.Auth;
 using X_Chang.CORE.Core.Entities;
@@ -30,33 +30,40 @@ public class AuthService : IAuthService
     public async Task<AuthResponseDto> RegistrarAsync(RegisterRequestDto request)
     {
         if (request.Password != request.ConfirmarPassword)
-            throw new InvalidOperationException("Las contraseñas no coinciden.");
+            throw new InvalidOperationException("No coinciden");
 
         if (await _authRepo.ExisteCorreoAsync(request.CorreoElectronico))
-            throw new InvalidOperationException("Correo ya registrado.");
+            throw new InvalidOperationException("Correo ya registrado");
 
         if (await _authRepo.ExisteNombreUsuarioAsync(request.NombreUsuario))
-            throw new InvalidOperationException("Usuario ya registrado.");
+            throw new InvalidOperationException("Usuario ya registrado");
 
-        var rol = await _authRepo.ObtenerRolPorNombreAsync("Usuario")
-            ?? throw new InvalidOperationException("Rol 'Usuario' no configurado.");
+        var rol = await _authRepo.ObtenerRolPorNombreAsync("USU")
+            ?? throw new InvalidOperationException("Rol USU no configurado.");
 
         _ = await _authRepo.ObtenerPaisAsync(request.PaisId)
-            ?? throw new InvalidOperationException("País no encontrado.");
+            ?? throw new InvalidOperationException("Seleccione un país");
 
         var usuario = await _authRepo.CrearUsuarioAsync(new Usuarios
         {
-            NombreUsuario = request.NombreUsuario,
-            CorreoElectronico = request.CorreoElectronico,
-            PasswordHash = BC.HashPassword(request.Password),
+            NombreUsuario = request.NombreUsuario.Trim(),
+            CorreoElectronico = request.CorreoElectronico.Trim(),
+            PasswordHash = HashSha256(request.Password),
             RolId = rol.RolId,
             PaisId = request.PaisId,
-            TemaVisual = "Claro",
+            TemaVisual = "Oscuro",
             Estado = "Activo",
-            FechaRegistro = DateTime.UtcNow
+            FechaRegistro = DateTime.UtcNow,
+            Telefono = request.Telefono,
+            TipoDocumento = request.TipoDocumento,
+            NumeroDocumento = request.NumeroDocumento
         });
 
-        await _authRepo.CrearBilleteraAsync(new Billeteras { UsuarioId = usuario.UsuarioId, FechaCreacion = DateTime.UtcNow });
+        await _authRepo.CrearBilleteraAsync(new Billeteras
+        {
+            UsuarioId = usuario.UsuarioId,
+            FechaCreacion = DateTime.UtcNow
+        });
 
         await _emailService.EnviarAsync(
             usuario.CorreoElectronico,
@@ -86,7 +93,8 @@ public class AuthService : IAuthService
         var id = request.IdentificadorAcceso.Trim();
         var metodoIngreso = id.Contains('@') ? "CorreoElectronico" : "NombreUsuario";
         var usuario = await _authRepo.BuscarPorIdentificadorAsync(id);
-        var exito = usuario != null && BC.Verify(request.Password, usuario.PasswordHash);
+        var hash = HashSha256(request.Password);
+        var exito = usuario != null && string.Equals(usuario.PasswordHash, hash, StringComparison.OrdinalIgnoreCase);
 
         if (usuario != null)
         {
@@ -100,11 +108,11 @@ public class AuthService : IAuthService
             });
         }
 
-        if (!exito || usuario == null)
-            throw new UnauthorizedAccessException("Correo o contraseña incorrectos.");
+        if (usuario == null || !exito)
+            throw new UnauthorizedAccessException("Credenciales inválidas");
 
-        if (usuario.Estado != "Activo")
-            throw new UnauthorizedAccessException($"La cuenta está {usuario.Estado.ToLower()}.");
+        if (usuario.Estado != "Activo" && usuario.Estado != "Restringido")
+            throw new UnauthorizedAccessException("Credenciales inválidas");
 
         await _authRepo.ActualizarFechaAccesoAsync(usuario.UsuarioId);
         return await GenerarResponseAsync(usuario, usuario.Rol.Nombre);
@@ -118,10 +126,10 @@ public class AuthService : IAuthService
         var sesion = await _sesionRepo.ObtenerSesionActivaAsync(request.Token);
 
         if (sesion == null || sesion.FechaExpiracion < DateTime.UtcNow)
-            throw new UnauthorizedAccessException("Token inválido o expirado.");
+            throw new UnauthorizedAccessException("Credenciales inválidas");
 
-        if (sesion.Usuario.Estado != "Activo")
-            throw new UnauthorizedAccessException("La cuenta no está activa.");
+        if (sesion.Usuario.Estado != "Activo" && sesion.Usuario.Estado != "Restringido")
+            throw new UnauthorizedAccessException("Credenciales inválidas");
 
         await _sesionRepo.CerrarSesionAsync(request.Token);
         return await GenerarResponseAsync(sesion.Usuario, sesion.Usuario.Rol.Nombre);
@@ -130,13 +138,25 @@ public class AuthService : IAuthService
     private async Task<AuthResponseDto> GenerarResponseAsync(Usuarios usuario, string rolNombre)
     {
         var token = Convert.ToBase64String(RandomNumberGenerator.GetBytes(64));
-        var expira = DateTime.UtcNow.AddDays(_settings.ExpiresInDays);
+        var expira = DateTime.UtcNow.AddDays(_settings.ExpiresInDays <= 0 ? 7 : _settings.ExpiresInDays);
 
         await _sesionRepo.CerrarSesionesActivasDeUsuarioAsync(usuario.UsuarioId);
         await _sesionRepo.CrearSesionAsync(usuario.UsuarioId, token, expira);
 
         return new AuthResponseDto(token, expira, new UsuarioInfoDto(
-            usuario.UsuarioId, usuario.NombreUsuario, usuario.CorreoElectronico,
-            rolNombre, usuario.TemaVisual, usuario.Estado));
+            usuario.UsuarioId,
+            usuario.NombreUsuario,
+            usuario.CorreoElectronico,
+            MapRol(rolNombre),
+            usuario.TemaVisual,
+            usuario.Estado));
+    }
+
+    private static string MapRol(string rolNombre) => rolNombre == "ADM" ? "Administrador" : "Usuario";
+
+    private static string HashSha256(string value)
+    {
+        var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(value));
+        return Convert.ToHexString(bytes).ToLowerInvariant();
     }
 }

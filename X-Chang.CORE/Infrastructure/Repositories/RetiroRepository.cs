@@ -59,7 +59,7 @@ public class RetiroRepository : IRetiroRepository
         return saldo?.SaldoDisponible ?? 0m;
     }
 
-    public async Task<(int retiroId, decimal nuevoSaldo, DateTime fecha, string voucherUrl)> RegistrarRetiro(
+    public async Task<(int retiroId, decimal nuevoSaldo, DateTime fecha, string? voucherUrl)> RegistrarRetiro(
         int usuarioId, int monedaId, int metodoPagoId,
         decimal monto, decimal comision, decimal montoFinal,
         string correoDestino, string codigoIso)
@@ -120,21 +120,6 @@ public class RetiroRepository : IRetiroRepository
                 FechaHora = DateTime.UtcNow,
                 Estado = "Completada",
                 MetodoEjecucion = null
-            });
-
-            _context.NotificacionesCorreo.Add(new NotificacionesCorreo
-            {
-                UsuarioId = usuarioId,
-                CorreoDestino = correoDestino,
-                TipoEvento = "Retiro",
-                Asunto = $"Retiro confirmado - {codigoIso}",
-                Cuerpo = $"Su retiro de {monto} {codigoIso} ha sido registrado. " +
-                         $"Comisión aplicada: {comision} {codigoIso}. " +
-                         $"Monto final a recibir: {montoFinal} {codigoIso}.",
-                EstadoEnvio = "Pendiente",
-                FechaCreacion = DateTime.UtcNow,
-                ReferenciaTipo = "Retiro",
-                ReferenciaId = retiro.RetiroId
             });
 
             await _context.SaveChangesAsync();
