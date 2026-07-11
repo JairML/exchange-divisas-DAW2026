@@ -9,5 +9,11 @@ namespace X_Chang.CORE.Core.Interfaces
 
         Task<HistorialTransaccionesResponseDto> ObtenerParaExportarAsync(
             string tokenSesion, DateTime? fechaDesde, DateTime? fechaHasta, string? columna);
+
+        Task<ExportarHistorialResponseDto> ExportarExcelAsync(
+            string tokenSesion, ExportarHistorialRequestDto filtro);
+
+        Task<ExportarHistorialResponseDto> ExportarPdfAsync(
+            string tokenSesion, ExportarHistorialRequestDto filtro);
     }
 }

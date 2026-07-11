@@ -24,9 +24,19 @@ namespace X_Chang.API.Controllers
         private int UsuarioId => int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
 
         [HttpGet("detalle")]
-        public async Task<IActionResult> GetDetalle([FromQuery] string tipo, [FromQuery] int id)
+        public async Task<IActionResult> GetDetalle(
+            [FromQuery] string? tipo,
+            [FromQuery] int? id,
+            [FromQuery] string? tipoOperacion,
+            [FromQuery] int? referenciaId)
         {
-            var resultado = await _cancelacionService.GetDetalle(UsuarioId, tipo, id);
+            var tipoFinal = !string.IsNullOrWhiteSpace(tipo) ? tipo : tipoOperacion;
+            var idFinal = id ?? referenciaId;
+
+            if (string.IsNullOrWhiteSpace(tipoFinal) || idFinal is null or <= 0)
+                return BadRequest(new { mensaje = "No se pudo identificar la operación a cancelar." });
+
+            var resultado = await _cancelacionService.GetDetalle(UsuarioId, tipoFinal, idFinal.Value);
             if (!resultado.Exito)
                 return BadRequest(new { mensaje = resultado.Mensaje });
             return Ok(resultado.Data);

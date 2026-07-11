@@ -54,7 +54,10 @@ namespace X_Chang.CORE.Infrastructure.Repositories
         public async Task<Dictionary<int, decimal>> ObtenerMayoresPreciosCompraAsync()
         {
             return await _context.OrdenesCompra
-                .Where(o => EstadosActivos.Contains(o.Estado))
+                .Where(o => EstadosActivos.Contains(o.Estado)
+                    && !(_context.OfertasVenta.Any(v => v.OrdenCompraEspejoId == o.OrdenCompraId)
+                        && !_context.MovimientosBilletera.Any(m => m.ReferenciaId == o.OrdenCompraId
+                            && (m.ReferenciaTipo == "OrdenCompra" || m.ReferenciaTipo == "ordenescompra"))))
                 .GroupBy(o => o.ParMonedaId)
                 .Select(g => new { g.Key, Max = g.Max(o => o.PrecioUnitario) })
                 .ToDictionaryAsync(x => x.Key, x => x.Max);
@@ -63,7 +66,10 @@ namespace X_Chang.CORE.Infrastructure.Repositories
         public async Task<Dictionary<int, decimal>> ObtenerMenoresPreciosVentaAsync()
         {
             return await _context.OfertasVenta
-                .Where(o => EstadosActivos.Contains(o.Estado))
+                .Where(o => EstadosActivos.Contains(o.Estado)
+                    && !(o.OrdenCompraEspejoId != null
+                        && !_context.MovimientosBilletera.Any(m => m.ReferenciaId == o.OfertaVentaId
+                            && (m.ReferenciaTipo == "OfertaVenta" || m.ReferenciaTipo == "ofertasventa"))))
                 .GroupBy(o => o.ParMonedaId)
                 .Select(g => new { g.Key, Min = g.Min(o => o.PrecioUnitario) })
                 .ToDictionaryAsync(x => x.Key, x => x.Min);

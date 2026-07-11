@@ -20,9 +20,17 @@ namespace X_Chang.API.Controllers
         private string ObtenerTokenSesion()
         {
             var authHeader = Request.Headers.Authorization.FirstOrDefault();
-            if (authHeader == null || !authHeader.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
-                throw new UnauthorizedAccessException("No se envió el token de sesión.");
-            return authHeader["Bearer ".Length..].Trim();
+
+            if (!string.IsNullOrWhiteSpace(authHeader) &&
+                authHeader.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
+            {
+                return authHeader["Bearer ".Length..].Trim();
+            }
+
+            if (Request.Headers.TryGetValue("tokenSesion", out var tokenSesion))
+                return tokenSesion.ToString();
+
+            throw new UnauthorizedAccessException("No se envió el token de sesión.");
         }
 
         [HttpGet]
@@ -40,7 +48,7 @@ namespace X_Chang.API.Controllers
             }
             catch (Exception ex)
             {
-                return BadRequest(new { mensaje = ex.Message });
+                return BadRequest(new { mensaje = ex.Message, detalle = ex.InnerException?.Message });
             }
         }
 
@@ -62,7 +70,45 @@ namespace X_Chang.API.Controllers
             }
             catch (Exception ex)
             {
-                return BadRequest(new { mensaje = ex.Message });
+                return BadRequest(new { mensaje = ex.Message, detalle = ex.InnerException?.Message });
+            }
+        }
+
+        [HttpPost("exportar-excel")]
+        public async Task<IActionResult> ExportarExcel([FromBody] ExportarHistorialRequestDto filtro)
+        {
+            try
+            {
+                var token = ObtenerTokenSesion();
+                var resultado = await _service.ExportarExcelAsync(token, filtro);
+                return File(resultado.Archivo, resultado.TipoContenido, resultado.NombreArchivo);
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                return Unauthorized(new { mensaje = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { mensaje = ex.Message, detalle = ex.InnerException?.Message });
+            }
+        }
+
+        [HttpPost("exportar-pdf")]
+        public async Task<IActionResult> ExportarPdf([FromBody] ExportarHistorialRequestDto filtro)
+        {
+            try
+            {
+                var token = ObtenerTokenSesion();
+                var resultado = await _service.ExportarPdfAsync(token, filtro);
+                return File(resultado.Archivo, resultado.TipoContenido, resultado.NombreArchivo);
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                return Unauthorized(new { mensaje = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { mensaje = ex.Message, detalle = ex.InnerException?.Message });
             }
         }
     }
