@@ -12,10 +12,12 @@ namespace X_Chang.API.Controllers;
 public class OfertasController : ControllerBase
 {
     private readonly IOfertaService _ofertaService;
+    private readonly INotificacionesCorreoService _notifService;
 
-    public OfertasController(IOfertaService ofertaService)
+    public OfertasController(IOfertaService ofertaService, INotificacionesCorreoService notifService)
     {
         _ofertaService = ofertaService;
+        _notifService = notifService;
     }
 
     private int UsuarioId => int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
@@ -33,6 +35,17 @@ public class OfertasController : ControllerBase
         try
         {
             var result = await _ofertaService.CrearOfertaVentaAsync(UsuarioId, request);
+
+            await _notifService.EncolarAsync(
+                UsuarioId,
+                "OfertaVenta",
+                $"Oferta de venta registrada: {result.MonedaOrigen} → {result.MonedaDestino}",
+                $"Tu oferta de venta de {result.CantidadOriginal} {result.MonedaOrigen} a {result.PrecioUnitario} fue registrada. " +
+                $"Ejecutado hasta ahora: {result.CantidadVendida} {result.MonedaOrigen}. " +
+                $"Estado: {result.Estado}. Fecha: {result.FechaCreacion:dd/MM/yyyy HH:mm}.",
+                "OfertaVenta",
+                result.OfertaVentaId);
+
             return Ok(result);
         }
         catch (InvalidOperationException ex)
