@@ -18,39 +18,34 @@ namespace X_Chang.CORE.Infrastructure.Repositories
         public async Task<PaginadoDto<OrdenCompraHistorialDto>> ObtenerOrdenesCompraAsync(
             int usuarioId, DateTime? fechaDesde, DateTime? fechaHasta, int pagina, int registrosPorPagina)
         {
-            var query = _context.OrdenesCompra
+            var ordenes = await _context.OrdenesCompra
                 .AsNoTracking()
                 .Include(o => o.ParMoneda)
                     .ThenInclude(p => p.MonedaOrigen)
                 .Include(o => o.ParMoneda)
                     .ThenInclude(p => p.MonedaDestino)
+                .Include(o => o.EjecucionesOrden)
+                .Include(o => o.CancelacionesOrdenOferta)
                 .Where(o => o.UsuarioId == usuarioId)
-                .AsQueryable();
+                .ToListAsync();
 
-            if (fechaDesde.HasValue)
-                query = query.Where(o => o.FechaCreacion >= fechaDesde.Value);
+            var ordenIds = ordenes.Select(o => o.OrdenCompraId).ToList();
+            var movimientosPorOrden = await ObtenerMovimientosOrdenesAsync(usuarioId, ordenIds);
 
-            if (fechaHasta.HasValue)
-                query = query.Where(o => o.FechaCreacion <= fechaHasta.Value);
+            var listaCompleta = ordenes
+                .SelectMany(o => MapearEstadosOrdenCompra(
+                    o,
+                    movimientosPorOrden.TryGetValue(o.OrdenCompraId, out var movimientos)
+                        ? movimientos
+                        : new List<MovimientosBilletera>()))
+                .Where(x => !fechaDesde.HasValue || x.FechaHora >= fechaDesde.Value)
+                .Where(x => !fechaHasta.HasValue || x.FechaHora <= fechaHasta.Value)
+                .OrderByDescending(x => x.FechaHora)
+                .ThenByDescending(x => x.OrdenCompraId)
+                .ToList();
 
-            query = query.OrderByDescending(o => o.FechaCreacion);
-
-            var total = await query.CountAsync();
-            var items = await AplicarPaginacion(query, pagina, registrosPorPagina);
-
-            var lista = items.Select(o => new OrdenCompraHistorialDto
-            {
-                OrdenCompraId = o.OrdenCompraId,
-                FechaHora = o.FechaCreacion,
-                ParMonedas = $"{o.ParMoneda.MonedaOrigen.CodigoIso}/{o.ParMoneda.MonedaDestino.CodigoIso}",
-                CantidadOriginal = o.CantidadOriginal,
-                CantidadObtenida = o.CantidadObtenida,
-                CantidadPendiente = o.CantidadPendiente,
-                PrecioUnitario = o.PrecioUnitario,
-                TotalComprometido = o.TotalComprometido,
-                TotalEjecutado = o.TotalEjecutado,
-                Estado = o.Estado
-            }).ToList();
+            var total = listaCompleta.Count;
+            var lista = AplicarPaginacionLista(listaCompleta, pagina, registrosPorPagina);
 
             return ConstruirPaginado(lista, total, pagina, registrosPorPagina);
         }
@@ -58,39 +53,34 @@ namespace X_Chang.CORE.Infrastructure.Repositories
         public async Task<PaginadoDto<OfertaVentaHistorialDto>> ObtenerOfertasVentaAsync(
             int usuarioId, DateTime? fechaDesde, DateTime? fechaHasta, int pagina, int registrosPorPagina)
         {
-            var query = _context.OfertasVenta
+            var ofertas = await _context.OfertasVenta
                 .AsNoTracking()
                 .Include(o => o.ParMoneda)
                     .ThenInclude(p => p.MonedaOrigen)
                 .Include(o => o.ParMoneda)
                     .ThenInclude(p => p.MonedaDestino)
+                .Include(o => o.EjecucionesOrden)
+                .Include(o => o.CancelacionesOrdenOferta)
                 .Where(o => o.UsuarioId == usuarioId)
-                .AsQueryable();
+                .ToListAsync();
 
-            if (fechaDesde.HasValue)
-                query = query.Where(o => o.FechaCreacion >= fechaDesde.Value);
+            var ofertaIds = ofertas.Select(o => o.OfertaVentaId).ToList();
+            var movimientosPorOferta = await ObtenerMovimientosOfertasAsync(usuarioId, ofertaIds);
 
-            if (fechaHasta.HasValue)
-                query = query.Where(o => o.FechaCreacion <= fechaHasta.Value);
+            var listaCompleta = ofertas
+                .SelectMany(o => MapearEstadosOfertaVenta(
+                    o,
+                    movimientosPorOferta.TryGetValue(o.OfertaVentaId, out var movimientos)
+                        ? movimientos
+                        : new List<MovimientosBilletera>()))
+                .Where(x => !fechaDesde.HasValue || x.FechaHora >= fechaDesde.Value)
+                .Where(x => !fechaHasta.HasValue || x.FechaHora <= fechaHasta.Value)
+                .OrderByDescending(x => x.FechaHora)
+                .ThenByDescending(x => x.OfertaVentaId)
+                .ToList();
 
-            query = query.OrderByDescending(o => o.FechaCreacion);
-
-            var total = await query.CountAsync();
-            var items = await AplicarPaginacion(query, pagina, registrosPorPagina);
-
-            var lista = items.Select(o => new OfertaVentaHistorialDto
-            {
-                OfertaVentaId = o.OfertaVentaId,
-                FechaHora = o.FechaCreacion,
-                ParMonedas = $"{o.ParMoneda.MonedaOrigen.CodigoIso}/{o.ParMoneda.MonedaDestino.CodigoIso}",
-                CantidadOriginal = o.CantidadOriginal,
-                CantidadVendida = o.CantidadVendida,
-                CantidadPendiente = o.CantidadPendiente,
-                PrecioUnitario = o.PrecioUnitario,
-                TotalEsperado = o.TotalEsperado,
-                TotalRecibido = o.TotalRecibido,
-                Estado = o.Estado
-            }).ToList();
+            var total = listaCompleta.Count;
+            var lista = AplicarPaginacionLista(listaCompleta, pagina, registrosPorPagina);
 
             return ConstruirPaginado(lista, total, pagina, registrosPorPagina);
         }
@@ -254,6 +244,234 @@ namespace X_Chang.CORE.Infrastructure.Repositories
             };
         }
 
+        private async Task<Dictionary<int, List<MovimientosBilletera>>> ObtenerMovimientosOrdenesAsync(
+            int usuarioId, List<int> ordenIds)
+        {
+            if (ordenIds.Count == 0)
+                return new Dictionary<int, List<MovimientosBilletera>>();
+
+            var movimientos = await _context.MovimientosBilletera
+                .AsNoTracking()
+                .Where(m =>
+                    m.UsuarioId == usuarioId &&
+                    m.ReferenciaId.HasValue &&
+                    ordenIds.Contains(m.ReferenciaId.Value) &&
+                    m.ReferenciaTipo != null &&
+                    m.ReferenciaTipo.ToLower() == "ordenescompra" &&
+                    m.Monto > 0)
+                .OrderBy(m => m.FechaMovimiento)
+                .ThenBy(m => m.MovimientoId)
+                .ToListAsync();
+
+            return movimientos
+                .GroupBy(m => m.ReferenciaId!.Value)
+                .ToDictionary(g => g.Key, g => g.ToList());
+        }
+
+        private async Task<Dictionary<int, List<MovimientosBilletera>>> ObtenerMovimientosOfertasAsync(
+            int usuarioId, List<int> ofertaIds)
+        {
+            if (ofertaIds.Count == 0)
+                return new Dictionary<int, List<MovimientosBilletera>>();
+
+            var movimientos = await _context.MovimientosBilletera
+                .AsNoTracking()
+                .Where(m =>
+                    m.UsuarioId == usuarioId &&
+                    m.ReferenciaId.HasValue &&
+                    ofertaIds.Contains(m.ReferenciaId.Value) &&
+                    m.ReferenciaTipo != null &&
+                    m.ReferenciaTipo.ToLower() == "ofertasventa" &&
+                    m.Monto > 0)
+                .OrderBy(m => m.FechaMovimiento)
+                .ThenBy(m => m.MovimientoId)
+                .ToListAsync();
+
+            return movimientos
+                .GroupBy(m => m.ReferenciaId!.Value)
+                .ToDictionary(g => g.Key, g => g.ToList());
+        }
+
+        private static IEnumerable<OrdenCompraHistorialDto> MapearEstadosOrdenCompra(
+            OrdenesCompra orden, List<MovimientosBilletera> movimientosOrden)
+        {
+            var par = $"{orden.ParMoneda.MonedaOrigen.CodigoIso}/{orden.ParMoneda.MonedaDestino.CodigoIso}";
+            var registros = new List<OrdenCompraHistorialDto>();
+            decimal cantidadObtenida = 0;
+            decimal totalEjecutado = 0;
+
+            registros.Add(new OrdenCompraHistorialDto
+            {
+                OrdenCompraId = orden.OrdenCompraId,
+                FechaHora = orden.FechaCreacion,
+                ParMonedas = par,
+                CantidadOriginal = orden.CantidadOriginal,
+                CantidadObtenida = 0,
+                CantidadPendiente = orden.CantidadOriginal,
+                PrecioUnitario = orden.PrecioUnitario,
+                TotalComprometido = orden.TotalComprometido,
+                TotalEjecutado = 0,
+                Estado = "Activa"
+            });
+
+            var eventosEjecucion = orden.EjecucionesOrden
+                .Select(e => new EjecucionHistorialFuente
+                {
+                    Id = e.EjecucionId,
+                    Fecha = e.FechaEjecucion,
+                    Cantidad = e.CantidadEjecutada,
+                    Total = e.TotalOperacion,
+                    Fuente = "EjecucionOrden"
+                })
+                .Concat(movimientosOrden.Select(m => new EjecucionHistorialFuente
+                {
+                    Id = m.MovimientoId,
+                    Fecha = m.FechaMovimiento,
+                    Cantidad = Math.Abs(m.Monto),
+                    Total = Math.Abs(m.Monto) * orden.PrecioUnitario,
+                    Fuente = "MovimientoBilletera"
+                }))
+                .Where(e => e.Cantidad > 0)
+                .OrderBy(e => e.Fecha)
+                .ThenBy(e => e.Id)
+                .ToList();
+
+            foreach (var ejecucion in eventosEjecucion)
+            {
+                cantidadObtenida += ejecucion.Cantidad;
+                totalEjecutado += ejecucion.Total;
+                var cantidadPendiente = Math.Max(0, orden.CantidadOriginal - cantidadObtenida);
+
+                registros.Add(new OrdenCompraHistorialDto
+                {
+                    OrdenCompraId = orden.OrdenCompraId,
+                    FechaHora = ejecucion.Fecha,
+                    ParMonedas = par,
+                    CantidadOriginal = orden.CantidadOriginal,
+                    CantidadObtenida = cantidadObtenida,
+                    CantidadPendiente = cantidadPendiente,
+                    PrecioUnitario = orden.PrecioUnitario,
+                    TotalComprometido = orden.TotalComprometido,
+                    TotalEjecutado = totalEjecutado,
+                    Estado = cantidadPendiente <= 0.00000001m ? "Completada" : "Parcialmente ejecutada"
+                });
+            }
+
+            foreach (var cancelacion in orden.CancelacionesOrdenOferta.OrderBy(c => c.FechaCancelacion).ThenBy(c => c.CancelacionId))
+            {
+                var cantidadEjecutada = cancelacion.CantidadEjecutada > 0 ? cancelacion.CantidadEjecutada : cantidadObtenida;
+                var cantidadCancelada = cancelacion.CantidadCancelada > 0
+                    ? cancelacion.CantidadCancelada
+                    : Math.Max(0, orden.CantidadOriginal - cantidadEjecutada);
+
+                registros.Add(new OrdenCompraHistorialDto
+                {
+                    OrdenCompraId = orden.OrdenCompraId,
+                    FechaHora = cancelacion.FechaCancelacion,
+                    ParMonedas = par,
+                    CantidadOriginal = orden.CantidadOriginal,
+                    CantidadObtenida = cantidadEjecutada,
+                    CantidadPendiente = cantidadCancelada,
+                    PrecioUnitario = orden.PrecioUnitario,
+                    TotalComprometido = orden.TotalComprometido,
+                    TotalEjecutado = totalEjecutado,
+                    Estado = "Cancelada"
+                });
+            }
+
+            return registros;
+        }
+
+        private static IEnumerable<OfertaVentaHistorialDto> MapearEstadosOfertaVenta(
+            OfertasVenta oferta, List<MovimientosBilletera> movimientosOferta)
+        {
+            var par = $"{oferta.ParMoneda.MonedaOrigen.CodigoIso}/{oferta.ParMoneda.MonedaDestino.CodigoIso}";
+            var registros = new List<OfertaVentaHistorialDto>();
+            decimal cantidadVendida = 0;
+            decimal totalRecibido = 0;
+
+            registros.Add(new OfertaVentaHistorialDto
+            {
+                OfertaVentaId = oferta.OfertaVentaId,
+                FechaHora = oferta.FechaCreacion,
+                ParMonedas = par,
+                CantidadOriginal = oferta.CantidadOriginal,
+                CantidadVendida = 0,
+                CantidadPendiente = oferta.CantidadOriginal,
+                PrecioUnitario = oferta.PrecioUnitario,
+                TotalEsperado = oferta.TotalEsperado,
+                TotalRecibido = 0,
+                Estado = "Activa"
+            });
+
+            var eventosEjecucion = oferta.EjecucionesOrden
+                .Select(e => new EjecucionHistorialFuente
+                {
+                    Id = e.EjecucionId,
+                    Fecha = e.FechaEjecucion,
+                    Cantidad = e.CantidadEjecutada,
+                    Total = e.TotalOperacion,
+                    Fuente = "EjecucionOrden"
+                })
+                .Concat(movimientosOferta.Select(m => new EjecucionHistorialFuente
+                {
+                    Id = m.MovimientoId,
+                    Fecha = m.FechaMovimiento,
+                    Cantidad = oferta.PrecioUnitario > 0 ? Math.Abs(m.Monto) / oferta.PrecioUnitario : 0,
+                    Total = Math.Abs(m.Monto),
+                    Fuente = "MovimientoBilletera"
+                }))
+                .Where(e => e.Cantidad > 0)
+                .OrderBy(e => e.Fecha)
+                .ThenBy(e => e.Id)
+                .ToList();
+
+            foreach (var ejecucion in eventosEjecucion)
+            {
+                cantidadVendida += ejecucion.Cantidad;
+                totalRecibido += ejecucion.Total;
+                var cantidadPendiente = Math.Max(0, oferta.CantidadOriginal - cantidadVendida);
+
+                registros.Add(new OfertaVentaHistorialDto
+                {
+                    OfertaVentaId = oferta.OfertaVentaId,
+                    FechaHora = ejecucion.Fecha,
+                    ParMonedas = par,
+                    CantidadOriginal = oferta.CantidadOriginal,
+                    CantidadVendida = cantidadVendida,
+                    CantidadPendiente = cantidadPendiente,
+                    PrecioUnitario = oferta.PrecioUnitario,
+                    TotalEsperado = oferta.TotalEsperado,
+                    TotalRecibido = totalRecibido,
+                    Estado = cantidadPendiente <= 0.00000001m ? "Completada" : "Parcialmente ejecutada"
+                });
+            }
+
+            foreach (var cancelacion in oferta.CancelacionesOrdenOferta.OrderBy(c => c.FechaCancelacion).ThenBy(c => c.CancelacionId))
+            {
+                var cantidadEjecutada = cancelacion.CantidadEjecutada > 0 ? cancelacion.CantidadEjecutada : cantidadVendida;
+                var cantidadCancelada = cancelacion.CantidadCancelada > 0
+                    ? cancelacion.CantidadCancelada
+                    : Math.Max(0, oferta.CantidadOriginal - cantidadEjecutada);
+
+                registros.Add(new OfertaVentaHistorialDto
+                {
+                    OfertaVentaId = oferta.OfertaVentaId,
+                    FechaHora = cancelacion.FechaCancelacion,
+                    ParMonedas = par,
+                    CantidadOriginal = oferta.CantidadOriginal,
+                    CantidadVendida = cantidadEjecutada,
+                    CantidadPendiente = cantidadCancelada,
+                    PrecioUnitario = oferta.PrecioUnitario,
+                    TotalEsperado = oferta.TotalEsperado,
+                    TotalRecibido = totalRecibido,
+                    Estado = "Cancelada"
+                });
+            }
+
+            return registros;
+        }
+
         private static CompraInmediataHistorialDto MapearCompraInmediataDto(OperacionesInmediatas o)
         {
             var hijos = o.InverseOperacionPadre
@@ -300,6 +518,15 @@ namespace X_Chang.CORE.Infrastructure.Repositories
             };
         }
 
+        private sealed class EjecucionHistorialFuente
+        {
+            public int Id { get; set; }
+            public DateTime Fecha { get; set; }
+            public decimal Cantidad { get; set; }
+            public decimal Total { get; set; }
+            public string Fuente { get; set; } = string.Empty;
+        }
+
         private static async Task<List<T>> AplicarPaginacion<T>(
             IQueryable<T> query, int pagina, int registrosPorPagina) where T : class
         {
@@ -310,6 +537,17 @@ namespace X_Chang.CORE.Infrastructure.Repositories
                 .Skip((pagina - 1) * registrosPorPagina)
                 .Take(registrosPorPagina)
                 .ToListAsync();
+        }
+
+        private static List<T> AplicarPaginacionLista<T>(List<T> lista, int pagina, int registrosPorPagina)
+        {
+            if (registrosPorPagina == 0)
+                return lista;
+
+            return lista
+                .Skip((pagina - 1) * registrosPorPagina)
+                .Take(registrosPorPagina)
+                .ToList();
         }
 
         private static PaginadoDto<T> ConstruirPaginado<T>(
