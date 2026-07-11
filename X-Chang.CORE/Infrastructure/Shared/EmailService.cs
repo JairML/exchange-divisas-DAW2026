@@ -1,8 +1,8 @@
-using MailKit.Net.Smtp;
-using MailKit.Security;
+using System.Net.Http.Headers;
+using System.Text;
+using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using MimeKit;
 using X_Chang.CORE.Core.Entities;
 using X_Chang.CORE.Core.Interfaces;
 using X_Chang.CORE.Core.Settings;
@@ -11,12 +11,18 @@ namespace X_Chang.CORE.Infrastructure.Shared;
 
 public class EmailService : IEmailService
 {
-    private readonly SmtpSettings _smtp;
+    private const string RutaEnvioCorreo = "v3/smtp/email";
+
+    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+
+    private readonly HttpClient _httpClient;
+    private readonly BrevoSettings _brevo;
     private readonly ILogger<EmailService> _logger;
 
-    public EmailService(IOptions<SmtpSettings> smtp, ILogger<EmailService> logger)
+    public EmailService(HttpClient httpClient, IOptions<BrevoSettings> brevo, ILogger<EmailService> logger)
     {
-        _smtp = smtp.Value;
+        _httpClient = httpClient;
+        _brevo = brevo.Value;
         _logger = logger;
     }
 
@@ -26,46 +32,37 @@ public class EmailService : IEmailService
         string cuerpo,
         IEnumerable<AdjuntosCorreo>? adjuntos = null)
     {
-        _logger.LogInformation("Enviando email a {Destinatario} | Asunto: {Asunto} | SMTP: {Host}:{Puerto}",
-            destinatario, asunto, _smtp.Host, _smtp.Puerto);
+        _logger.LogInformation("Enviando email a {Destinatario} | Asunto: {Asunto} via Brevo API", destinatario, asunto);
+
+        var payload = new
+        {
+            sender = new { name = _brevo.NombreRemitente, email = _brevo.CorreoRemitente },
+            to = new[] { new { email = destinatario } },
+            subject = asunto,
+            htmlContent = ConstruirHtml(cuerpo, adjuntos)
+        };
+
+        using var request = new HttpRequestMessage(HttpMethod.Post, RutaEnvioCorreo)
+        {
+            Content = new StringContent(JsonSerializer.Serialize(payload, JsonOptions), Encoding.UTF8, "application/json")
+        };
+        request.Headers.TryAddWithoutValidation("api-key", _brevo.ApiKey);
+        request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
 
         try
         {
-            var mensaje = new MimeMessage();
-            mensaje.From.Add(new MailboxAddress(_smtp.NombreRemitente, _smtp.CorreoRemitente));
-            mensaje.To.Add(MailboxAddress.Parse(destinatario));
-            mensaje.Subject = asunto;
+            using var response = await _httpClient.SendAsync(request);
 
-            var builder = new BodyBuilder { HtmlBody = ConstruirHtml(cuerpo, adjuntos) };
-            mensaje.Body = builder.ToMessageBody();
+            if (response.IsSuccessStatusCode)
+            {
+                _logger.LogInformation("Email enviado exitosamente a {Destinatario}", destinatario);
+                return true;
+            }
 
-            using var client = new SmtpClient();
-            var socketOptions = _smtp.UsarSsl
-                ? SecureSocketOptions.SslOnConnect
-                : SecureSocketOptions.StartTlsWhenAvailable;
-
-            _logger.LogDebug("Conectando a {Host}:{Puerto} (SSL: {UsarSsl})", _smtp.Host, _smtp.Puerto, _smtp.UsarSsl);
-            await client.ConnectAsync(_smtp.Host, _smtp.Puerto, socketOptions);
-
-            _logger.LogDebug("Autenticando como {Usuario}", _smtp.Usuario);
-            await client.AuthenticateAsync(_smtp.Usuario, _smtp.Password);
-
-            await client.SendAsync(mensaje);
-            await client.DisconnectAsync(quit: true);
-
-            _logger.LogInformation("Email enviado exitosamente a {Destinatario}", destinatario);
-            return true;
-        }
-        catch (MailKit.Net.Smtp.SmtpCommandException ex)
-        {
-            _logger.LogError(ex, "Error SMTP al enviar a {Destinatario} | Código: {StatusCode} | Mensaje: {Message}",
-                destinatario, ex.StatusCode, ex.Message);
-            return false;
-        }
-        catch (MailKit.Security.AuthenticationException ex)
-        {
-            _logger.LogError(ex, "Fallo de autenticación SMTP con usuario {Usuario} | Mensaje: {Message}",
-                _smtp.Usuario, ex.Message);
+            var contenidoError = await response.Content.ReadAsStringAsync();
+            _logger.LogError(
+                "Error al enviar email a {Destinatario} via Brevo API | Status: {StatusCode} | Respuesta: {Respuesta}",
+                destinatario, (int)response.StatusCode, contenidoError);
             return false;
         }
         catch (Exception ex)

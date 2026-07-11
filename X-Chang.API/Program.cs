@@ -53,11 +53,13 @@ builder.Services.AddScoped<IOfertaService, OfertaService>();
 builder.Services.AddScoped<IHistorialTransaccionesService, HistorialTransaccionesService>();
 builder.Services.AddScoped<IConfiguracionUsuarioService, ConfiguracionUsuarioService>();
 
-builder.Services.Configure<SmtpSettings>(builder.Configuration.GetSection("SmtpSettings"));
-builder.Services.AddScoped<IEmailService, EmailService>();
+builder.Services.Configure<BrevoSettings>(builder.Configuration.GetSection("BrevoSettings"));
+builder.Services.AddHttpClient<IEmailService, EmailService>(client =>
+{
+    client.BaseAddress = new Uri("https://api.brevo.com/");
+});
 builder.Services.AddScoped<INotificacionesCorreoService, NotificacionesCorreoService>();
-// Correos desactivados temporalmente: por ahora solo se insertarán registros en notificacionescorreo.
-// builder.Services.AddHostedService<NotificacionesBackgroundService>();
+builder.Services.AddHostedService<NotificacionesBackgroundService>();
 
 builder.Services.AddScoped<IAuditoriaAdministrativaRepository, AuditoriaAdministrativaRepository>();
 builder.Services.AddScoped<IAuditoriaAdministrativaService, AuditoriaAdministrativaService>();
