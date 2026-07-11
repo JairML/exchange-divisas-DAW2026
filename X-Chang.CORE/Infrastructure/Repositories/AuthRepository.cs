@@ -58,4 +58,36 @@ public class AuthRepository : IAuthRepository
             await _context.SaveChangesAsync();
         }
     }
+
+    public Task<Usuarios?> BuscarPorCorreoAsync(string correo) =>
+        _context.Usuarios.FirstOrDefaultAsync(u => u.CorreoElectronico == correo);
+
+    public async Task GuardarTokenRecuperacionAsync(int usuarioId, string token, DateTime expira)
+    {
+        var usuario = await _context.Usuarios.FindAsync(usuarioId);
+        if (usuario != null)
+        {
+            usuario.TokenRecuperacion = token;
+            usuario.TokenRecuperacionExpira = expira;
+            await _context.SaveChangesAsync();
+        }
+    }
+
+    public Task<Usuarios?> BuscarPorTokenRecuperacionValidoAsync(string token) =>
+        _context.Usuarios.FirstOrDefaultAsync(u =>
+            u.TokenRecuperacion == token &&
+            u.TokenRecuperacionExpira != null &&
+            u.TokenRecuperacionExpira > DateTime.UtcNow);
+
+    public async Task ActualizarPasswordYLimpiarTokenAsync(int usuarioId, string nuevoPasswordHash)
+    {
+        var usuario = await _context.Usuarios.FindAsync(usuarioId);
+        if (usuario != null)
+        {
+            usuario.PasswordHash = nuevoPasswordHash;
+            usuario.TokenRecuperacion = null;
+            usuario.TokenRecuperacionExpira = null;
+            await _context.SaveChangesAsync();
+        }
+    }
 }

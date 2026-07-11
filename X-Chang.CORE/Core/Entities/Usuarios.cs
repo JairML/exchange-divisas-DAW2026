@@ -20,6 +20,8 @@ public partial class Usuarios
     public string? TipoDocumento { get; set; }
     public string? NumeroDocumento { get; set; }
     public string? FotoUrl { get; set; }
+    public string? TokenRecuperacion { get; set; }
+    public DateTime? TokenRecuperacionExpira { get; set; }
     public virtual ICollection<AccesosUsuario> AccesosUsuario { get; set; } = new List<AccesosUsuario>();
     public virtual ICollection<AuditoriaAdministrativa> AuditoriaAdministrativaAdministrador { get; set; } = new List<AuditoriaAdministrativa>();
     public virtual ICollection<AuditoriaAdministrativa> AuditoriaAdministrativaUsuarioAfectado { get; set; } = new List<AuditoriaAdministrativa>();

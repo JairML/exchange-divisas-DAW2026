@@ -13,4 +13,8 @@ public interface IAuthRepository
     Task RegistrarAccesoAsync(AccesosUsuario acceso);
     Task<Usuarios?> BuscarPorIdentificadorAsync(string identificador);
     Task ActualizarFechaAccesoAsync(int usuarioId);
+    Task<Usuarios?> BuscarPorCorreoAsync(string correo);
+    Task GuardarTokenRecuperacionAsync(int usuarioId, string token, DateTime expira);
+    Task<Usuarios?> BuscarPorTokenRecuperacionValidoAsync(string token);
+    Task ActualizarPasswordYLimpiarTokenAsync(int usuarioId, string nuevoPasswordHash);
 }

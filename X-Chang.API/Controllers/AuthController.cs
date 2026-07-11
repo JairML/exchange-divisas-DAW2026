@@ -70,6 +70,29 @@ public class AuthController : ControllerBase
         }
     }
 
+    [HttpPost("forgot-password")]
+    public async Task<IActionResult> ForgotPassword([FromBody] string correoElectronico)
+    {
+        if (!string.IsNullOrWhiteSpace(correoElectronico))
+            await _authService.SolicitarRecuperacionAsync(correoElectronico);
+
+        return Ok(new { mensaje = "Si el correo está registrado, te enviamos un enlace para restablecer tu contraseña." });
+    }
+
+    [HttpPost("reset-password")]
+    public async Task<IActionResult> ResetPassword([FromBody] ResetPasswordRequestDto request)
+    {
+        try
+        {
+            await _authService.RestablecerPasswordAsync(request);
+            return Ok(new { mensaje = "Tu contraseña fue actualizada correctamente." });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { mensaje = ex.Message });
+        }
+    }
+
     [Authorize]
     [HttpGet("me")]
     public IActionResult GetMe()
