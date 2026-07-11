@@ -11,10 +11,12 @@ namespace X_Chang.API.Controllers
     public class HistorialTransaccionesController : ControllerBase
     {
         private readonly IHistorialTransaccionesService _service;
+        private readonly IMercadoRepository _mercadoRepository;
 
-        public HistorialTransaccionesController(IHistorialTransaccionesService service)
+        public HistorialTransaccionesController(IHistorialTransaccionesService service, IMercadoRepository mercadoRepository)
         {
             _service = service;
+            _mercadoRepository = mercadoRepository;
         }
 
         private string ObtenerTokenSesion()
@@ -109,6 +111,20 @@ namespace X_Chang.API.Controllers
             catch (Exception ex)
             {
                 return BadRequest(new { mensaje = ex.Message, detalle = ex.InnerException?.Message });
+            }
+        }
+
+        [HttpGet("estados/{tipo}/{id:int}")]
+        public async Task<IActionResult> GetEstados(string tipo, int id)
+        {
+            try
+            {
+                var resultado = await _mercadoRepository.GetEstadosOperacionAsync(tipo, id);
+                return Ok(resultado);
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { mensaje = ex.Message });
             }
         }
     }
